@@ -3,6 +3,10 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import { buildVolcano } from './volcanoBuilder'
 import { AshPlumeSystem, SparkSystem } from './particles'
+import { ensureRockTexturesAsync, getLavaTexture } from './textures'
+import { logInitPhase, scheduleIdle, yieldFrame } from './initTiming'
+
+export type InitProgressStep = 'webgl' | 'textures' | 'model' | 'interactive' | 'effects'
 
 export interface LabelTexts {
   chamber: string
@@ -19,10 +23,10 @@ export class VolcanoScene {
   private camera: THREE.PerspectiveCamera
   private controls: OrbitControls
   private clock = new THREE.Clock()
-  private ash: AshPlumeSystem
-  private sparks: SparkSystem
-  private build: ReturnType<typeof buildVolcano>
-  private plumeMesh: THREE.Mesh
+  private ash: AshPlumeSystem | null = null
+  private sparks: SparkSystem | null = null
+  private build: ReturnType<typeof buildVolcano> | null = null
+  private plumeMesh: THREE.Mesh | null = null
   private clipPlane: THREE.Plane
   private cutawayEnabled = true
   private labelsVisible = true
@@ -31,8 +35,9 @@ export class VolcanoScene {
   private timeSec = 0
   private intensity = 0.65
   private container: HTMLElement
+  private loopRunning = false
 
-  constructor(container: HTMLElement) {
+  private constructor(container: HTMLElement) {
     this.container = container
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x87a4bc)
@@ -68,7 +73,7 @@ export class VolcanoScene {
     const sun = new THREE.DirectionalLight(0xfff5e6, 1.35)
     sun.position.set(6, 12, 4)
     sun.castShadow = true
-    sun.shadow.mapSize.set(2048, 2048)
+    sun.shadow.mapSize.set(1024, 1024)
     sun.shadow.camera.near = 1
     sun.shadow.camera.far = 40
     sun.shadow.camera.left = -12
@@ -82,15 +87,56 @@ export class VolcanoScene {
     fill.position.set(-5, 4, -6)
     this.scene.add(fill)
 
+    this.clipPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0)
+
+    this.handleResize()
+    window.addEventListener('resize', this.handleResize)
+  }
+
+  static async create(
+    container: HTMLElement,
+    onProgress?: (step: InitProgressStep) => void,
+  ): Promise<VolcanoScene> {
+    const t0 = performance.now()
+    onProgress?.('webgl')
+    await yieldFrame()
+
+    const instance = new VolcanoScene(container)
+    logInitPhase('WebGL + lights', t0)
+
+    onProgress?.('textures')
+    await ensureRockTexturesAsync()
+    getLavaTexture()
+    logInitPhase('textures', t0)
+
+    onProgress?.('model')
+    await yieldFrame()
+    instance.mountVolcanoGeometry()
+    logInitPhase('geometry', t0)
+
+    instance.renderOnce()
+    onProgress?.('interactive')
+    logInitPhase('first frame', t0)
+
+    scheduleIdle(() => {
+      instance.mountParticleEffects()
+      logInitPhase('particles (idle)', t0)
+      onProgress?.('effects')
+    })
+
+    if (import.meta.env.DEV) {
+      console.log(`[volcano:init] ready for interaction in ${(performance.now() - t0).toFixed(1)}ms`)
+    }
+
+    return instance
+  }
+
+  private mountVolcanoGeometry() {
     this.build = buildVolcano()
     this.scene.add(this.build.root)
+    this.applyClipPlanes()
 
-    this.ash = new AshPlumeSystem()
-    this.sparks = new SparkSystem()
-    this.scene.add(this.ash.points)
-    this.scene.add(this.sparks.points)
-
-    const plumeGeo = new THREE.CylinderGeometry(0.15, 1.2, 6, 16, 1, true)
+    const plumeGeo = new THREE.CylinderGeometry(0.15, 1.2, 6, 12, 1, true)
     const plumeMat = new THREE.MeshStandardMaterial({
       color: 0xb0b8c4,
       transparent: true,
@@ -104,15 +150,24 @@ export class VolcanoScene {
     this.plumeMesh = new THREE.Mesh(plumeGeo, plumeMat)
     this.plumeMesh.position.set(0, 7.2, 0)
     this.scene.add(this.plumeMesh)
+  }
 
-    this.clipPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0)
-    this.applyClipPlanes()
+  private mountParticleEffects() {
+    if (this.ash) return
+    this.ash = new AshPlumeSystem()
+    this.sparks = new SparkSystem()
+    this.scene.add(this.ash.points)
+    this.scene.add(this.sparks.points)
+  }
 
-    this.handleResize()
-    window.addEventListener('resize', this.handleResize)
+  private renderOnce() {
+    this.controls.update()
+    this.renderer.render(this.scene, this.camera)
+    this.labelRenderer.render(this.scene, this.camera)
   }
 
   private applyClipPlanes() {
+    if (!this.build) return
     const planes = this.cutawayEnabled ? [this.clipPlane] : []
     this.build.clipMaterials.forEach((m) => {
       m.clippingPlanes = planes
@@ -133,6 +188,7 @@ export class VolcanoScene {
   }
 
   updateLabelTexts(texts: LabelTexts) {
+    if (!this.build) return
     this.clearLabels()
     const defs: { text: string; pos: THREE.Vector3 }[] = [
       { text: texts.chamber, pos: new THREE.Vector3(-0.5, 0.9, 0) },
@@ -174,7 +230,7 @@ export class VolcanoScene {
   private activityFactor(): number {
     const t = this.timeSec
     let phase = 0
-    if (t < 6) phase = t / 6 * 0.15
+    if (t < 6) phase = (t / 6) * 0.15
     else if (t < 10) phase = 0.15 + ((t - 6) / 4) * 0.25
     else if (t < 14) phase = 0.4 + ((t - 10) / 4) * 0.35
     else if (t < 24) phase = 0.75 + ((t - 14) / 10) * 0.25
@@ -183,6 +239,7 @@ export class VolcanoScene {
   }
 
   private applyEruptionState() {
+    if (!this.build || !this.plumeMesh) return
     const a = this.activityFactor()
     const chamberMat = this.build.chamber.material as THREE.MeshStandardMaterial
     chamberMat.emissiveIntensity = 0.35 + a * 1.4
@@ -212,13 +269,15 @@ export class VolcanoScene {
   }
 
   start() {
+    if (this.loopRunning) return
+    this.loopRunning = true
     const loop = () => {
       this.animationId = requestAnimationFrame(loop)
       const dt = Math.min(this.clock.getDelta(), 0.05)
       this.controls.update()
       const a = this.activityFactor()
-      this.ash.update(dt, a)
-      this.sparks.update(dt, a)
+      this.ash?.update(dt, a)
+      this.sparks?.update(dt, a)
       this.renderer.render(this.scene, this.camera)
       this.labelRenderer.render(this.scene, this.camera)
     }

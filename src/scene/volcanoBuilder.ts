@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { createLavaTexture, createRockTextures } from './textures'
+import { getLavaTexture, getRockTextures } from './textures'
 
 export interface VolcanoBuildResult {
   root: THREE.Group
@@ -31,7 +31,7 @@ function volcanoProfilePoints(): THREE.Vector2[] {
 
 export function buildVolcano(): VolcanoBuildResult {
   const root = new THREE.Group()
-  const { map, roughnessMap, normalMap } = createRockTextures()
+  const { map, roughnessMap, normalMap } = getRockTextures()
   const clipMaterials: THREE.Material[] = []
 
   const makeRockMat = (colorTint?: number) => {
@@ -49,7 +49,7 @@ export function buildVolcano(): VolcanoBuildResult {
     return mat
   }
 
-  const coneGeo = new THREE.LatheGeometry(volcanoProfilePoints(), 64)
+  const coneGeo = new THREE.LatheGeometry(volcanoProfilePoints(), 48)
   coneGeo.computeVertexNormals()
   const cone = new THREE.Mesh(coneGeo, makeRockMat(0xc4a882))
   cone.castShadow = true
@@ -82,7 +82,7 @@ export function buildVolcano(): VolcanoBuildResult {
   root.add(ground)
 
   const chamberGeo = new THREE.SphereGeometry(1.15, 32, 24)
-  const lavaTex = createLavaTexture()
+  const lavaTex = getLavaTexture()
   const chamberMat = new THREE.MeshStandardMaterial({
     map: lavaTex,
     emissive: new THREE.Color(0xff4400),

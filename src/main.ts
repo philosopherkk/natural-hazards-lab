@@ -6,7 +6,7 @@ import {
   TIMELINE_DURATION,
   toggleLocale,
 } from './i18n'
-import { VolcanoScene } from './scene/VolcanoScene'
+import { VolcanoScene, type InitProgressStep } from './scene/VolcanoScene'
 import { APP_VERSION, UPDATE_DATE } from './version'
 
 interface UiRefs {
@@ -132,6 +132,23 @@ function tick(now: number, refs: UiRefs) {
   requestAnimationFrame((t) => tick(t, refs))
 }
 
+function loadingMessageForStep(step: InitProgressStep): string {
+  const t = getTranslations()
+  switch (step) {
+    case 'webgl':
+      return t.loadingWebgl
+    case 'textures':
+      return t.loadingTextures
+    case 'model':
+      return t.loadingModel
+    case 'effects':
+      return t.loadingEffects
+    case 'interactive':
+    default:
+      return t.loading
+  }
+}
+
 function bindUi(refs: UiRefs) {
   refs.timeline.addEventListener('input', () => {
     playing = false
@@ -246,8 +263,17 @@ function main() {
   bindUi(refs)
   applyTranslations(refs)
 
+  lastFrame = performance.now()
+  requestAnimationFrame((t) => tick(t, refs))
+
+  void initScene(refs)
+}
+
+async function initScene(refs: UiRefs) {
   try {
-    scene = new VolcanoScene(refs.canvasWrap)
+    scene = await VolcanoScene.create(refs.canvasWrap, (step) => {
+      refs.loading.textContent = loadingMessageForStep(step)
+    })
     scene.setCutaway(refs.cutaway.checked)
     scene.setLabelsVisible(refs.labels.checked)
     scene.setIntensity(parseFloat(refs.intensity.value))
@@ -265,9 +291,6 @@ function main() {
     refs.loading.textContent = `WebGL error: ${err instanceof Error ? err.message : String(err)}`
     console.error(err)
   }
-
-  lastFrame = performance.now()
-  requestAnimationFrame((t) => tick(t, refs))
 }
 
 main()

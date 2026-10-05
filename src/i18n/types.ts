@@ -45,6 +45,10 @@ export interface Translations {
   footerUpdated: string
   canvasAria: string
   loading: string
+  loadingWebgl: string
+  loadingTextures: string
+  loadingModel: string
+  loadingEffects: string
   stages: StageCopy[]
   legend: LegendItem[]
   keyboard: KeyboardHint[]
