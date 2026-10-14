@@ -190,9 +190,48 @@ body {
   margin: 0;
   font-size: 0.92rem;
   color: #cbd5e1;
-  max-height: 42vh;
+  max-height: 28vh;
   overflow-y: auto;
   padding-right: 0.25rem;
+}
+
+.engineering-panel {
+  background: rgba(15, 20, 25, 0.45);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.readout-grid {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+}
+
+.readout-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.readout-row dt {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.readout-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: #fde68a;
+  text-align: right;
+}
+
+.readout-row .unit {
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
 .side-block {

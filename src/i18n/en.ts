@@ -25,7 +25,21 @@ export const en: Translations = {
   legendHeading: 'Legend',
   helpHeading: 'Controls & accessibility',
   helpIntro:
-    'Explore how magma storage, conduit transport, and surface processes evolve through a stylized 30-second eruption cycle. Drag the timeline or use keyboard shortcuts.',
+    'Explore magma storage, conduit transport, and slope hazards through a 30-second eruption cycle. Live readouts use simplified Hagen–Poiseuille conduit flow and Arrhenius viscosity; scrubbing the timeline reconstructs the same state deterministically.',
+  engineeringHeading: 'Engineering readouts',
+  readoutPChamber: 'Chamber overpressure',
+  readoutTMagma: 'Magma temperature',
+  readoutViscosity: 'Viscosity η(T)',
+  readoutFlowQ: 'Conduit flux Q',
+  readoutEffusion: 'Effusion rate',
+  readoutLavaFront: 'Lava front (flank)',
+  readoutStructures: 'Structures affected',
+  readoutMeltFraction: 'Melt fraction',
+  unitMPa: 'MPa',
+  unitCelsius: '°C',
+  unitPas: 'Pa·s',
+  unitM3s: 'm³/s',
+  unitMeters: 'm',
   footerVersion: 'Version',
   footerUpdated: 'Updated',
   canvasAria: 'Three-dimensional volcano model with eruption animation',
@@ -44,6 +58,8 @@ export const en: Translations = {
     { color: '#c45c26', label: 'Molten magma & lava' },
     { color: '#6b7280', label: 'Ash & tephra column' },
     { color: '#fbbf24', label: 'Incandescent sparks & gas glow' },
+    { color: '#d4c4a8', label: 'Slope village (damage stages)' },
+    { color: '#1a1110', label: 'Cooling lava crust' },
   ],
   keyboard: [
     { keys: 'Space', action: 'Play or pause timeline' },
@@ -59,31 +75,31 @@ export const en: Translations = {
       id: 'build-up',
       title: 'Build-up — Magma accumulation & crustal stress',
       description:
-        'During prolonged repose, basaltic or andesitic melt collects in a shallow magma reservoir fed by dikes from deeper sources. Volatile species (H₂O, CO₂, S) remain dissolved at lithostatic pressure but increase the bulk compressibility of the mush. Thermal convection and crystal fractionation gradually enrich the upper chamber in silica and volatiles. Elastic strain energy accumulates in the surrounding edifice and basement as magma influx inflates the system; microseismicity and subtle ground deformation (GPS, InSAR) often herald this stage long before any surface eruption. In this phase the conduit may be partially sealed by quenched glass and hydrothermal minerals, trapping pressurized gas.',
+        'During prolonged repose, melt collects in a shallow reservoir fed by dikes. The sidebar P_chamber reflects effective overpressure in a lumped chamber tied to magma influx and bulk compressibility (ΔP ∝ −ΔV/V). Temperature T_magma sets viscosity through η = η₀ exp(Ea/R·(1/T − 1/T_ref)); while the vent is sealed, Q ≈ 0 and dV/dt ≈ q_in. Upslope households remain intact, but rising P_chamber increases future blast loads on windows and roofs once the conduit unseals.',
     },
     {
       id: 'pre-eruptive',
       title: 'Pre-eruptive — Degassing, pressurization & unsealing',
       description:
-        'As overpressure approaches the tensile strength of the cap rock, fractures propagate upward through the conduit zone. Exsolution of volatiles forms a separate vapor phase; bubbles nucleate, coalesce, and rise, lowering effective magma density and accelerating buoyancy-driven ascent. Long-period seismic tremor and harmonic events reflect fluid resonance in the conduit. Summit fumaroles intensify, issuing SO₂ and H₂S; acid leaching may destabilize crater walls. The free surface in the chamber sloshes and fragments the foamy cap, sending the first batches of gas-rich magma toward the vent. This is the critical transition from closed-system pressurization to open-system degassing.',
+        'Fractures link the chamber toward the vent; P_chamber peaks while η(T) still governs whether ascent is laminar once Q opens. Ash begins mantling roofs (increasing load ∝ ash thickness); the readout melt fraction tracks how much of the chamber remains mobile melt versus crystals. When P_chamber exceeds the cap-rock tensile threshold, the system shifts from closed pressurization to a path where Hagen–Poiseuille flux Q ∝ r⁴ΔP/(ηL) can draw down stored magma.',
     },
     {
       id: 'eruption-onset',
       title: 'Eruption onset — Vent opening & initial discharge',
       description:
-        'When the conduit connects the chamber to the atmosphere, pressure drops abruptly along a decompression path. The leading magma fragments by homogeneous or heterogeneous bubble nucleation, producing a mixture of liquid clots, crystals, and expanding gas — a multiphase jet emerges from the crater. Early activity is often Vulcanian or Strombolian: discrete bursts eject incandescent bombs and lithic blocks from the vent walls. Pyroclastic density currents are unlikely until column collapse begins; instead, short lava fountains and spatter ramps may construct ephemeral cones within the crater. Ash advection downwind begins as fine particles from ruptured bubble walls enter the plume.',
+        'Vent opening drops ΔP across the conduit; Q jumps according to Q = πr⁴ΔP/(8ηL). Effusion rate matches Q in this lumped model. Downwind ash causes the first household damage stage (surface ash, clogged gutters, minor roof load). Blast overpressure can shatter windows on nearest structures when P_chamber and activity spike. Conduit tracers in the cutaway visualize parcel transit time ∝ L/Q.',
     },
     {
       id: 'active',
       title: 'Active eruption — Sustained plume, lava effusion & tephra fallout',
       description:
-        'With steady magma supply, the eruption enters a sustained discharge regime. The eruption column rises through momentum flux from the vent and buoyancy from superheated gas; entrainment of ambient air lowers bulk density until the plume reaches the level of neutral buoyancy. Fine ash (<2 mm) undergoes turbulent diffusion and gravitational settling, producing tephra fallout fans and aviation hazards. Simultaneously, low-viscosity lava may pour from flank fissures or the summit, forming channelized flows whose rheology follows a temperature-dependent Bingham or Newtonian model with crusting and levees. Lightning in the plume arises from triboelectric charging of ice-coated particles in the umbrella cloud. Conduit erosion widens the vent, modulating mass eruption rate.',
+        'Sustained supply keeps q_in ≈ Q at quasi-steady P_chamber and T_magma; η(T) falls as T rises, feedback increasing Q until cooling wins. The lava front position integrates effusion (shown in meters down-flank): when front ≥ house distance, burial dominates. Roof fires track incandescent tephra flux (activity × intensity). Crust thickness on the flow grows as surface T drops (Newton/Stefan-style cooling sketched by dark crust opacity). Widening r in Q ∝ r⁴ mimics vent erosion.',
     },
     {
       id: 'settling',
       title: 'Settling — Waning discharge, column collapse & post-eruptive cooling',
       description:
-        'As chamber pressure and volatile content decline, mass flux decreases and the plume weakens. The column may become underpowered, leading to partial collapse and pyroclastic flows that sweep radial drainages — even during otherwise effusive-dominated episodes. Lava flows stagnate as supply wanes; surface crust thickens and insulates the interior, prolonging emplacement of lobes. Secondary lahars can form if ash mantles slopes and later mixes with rain or meltwater. Degassing shifts to passive fumarolic release; the conduit begins to heal with intrusive plugs and hydrothermal alteration. Geodetic signals often show deflation as the magma reservoir empties, completing the cycle until the next build-up.',
+        'Declining P_chamber and Q reduce effusion; η(T) rises as T_magma falls, choking flow. Collapsed structures reflect combined ash load, thermal weakening, and optional lava inundation. The structures-affected count summarizes severity stages (ash → blast → fire → collapse → buried). Chamber fill and melt fraction fall as dV/dt turns negative, completing the cycle until the next influx rebuilds P_chamber.',
     },
   ],
 }

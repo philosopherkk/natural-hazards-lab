@@ -1,8 +1,11 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
+import { computeEruptionState, type EruptionState } from '../model/eruptionModel'
 import { buildVolcano } from './volcanoBuilder'
 import { AshPlumeSystem, SparkSystem } from './particles'
+import { ConduitTracerSystem } from './conduitTracers'
+import { applyHouseSeverity } from './villageBuilder'
 import { ensureRockTexturesAsync, getLavaTexture } from './textures'
 import { logInitPhase, scheduleIdle, yieldFrame } from './initTiming'
 
@@ -16,6 +19,8 @@ export interface LabelTexts {
   plume: string
 }
 
+export type EngineeringReadoutListener = (state: EruptionState) => void
+
 export class VolcanoScene {
   readonly renderer: THREE.WebGLRenderer
   readonly labelRenderer: CSS2DRenderer
@@ -25,6 +30,7 @@ export class VolcanoScene {
   private clock = new THREE.Clock()
   private ash: AshPlumeSystem | null = null
   private sparks: SparkSystem | null = null
+  private tracers: ConduitTracerSystem | null = null
   private build: ReturnType<typeof buildVolcano> | null = null
   private plumeMesh: THREE.Mesh | null = null
   private clipPlane: THREE.Plane
@@ -36,12 +42,14 @@ export class VolcanoScene {
   private intensity = 0.65
   private container: HTMLElement
   private loopRunning = false
+  private readoutListener: EngineeringReadoutListener | null = null
+  private lastState: EruptionState | null = null
 
   private constructor(container: HTMLElement) {
     this.container = container
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x87a4bc)
-    this.scene.fog = new THREE.FogExp2(0x9eb5c9, 0.045)
+    this.scene.fog = new THREE.FogExp2(0x9eb5c9, 0.042)
 
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 120)
     this.camera.position.set(9, 5.5, 9)
@@ -114,7 +122,7 @@ export class VolcanoScene {
     instance.mountVolcanoGeometry()
     logInitPhase('geometry', t0)
 
-    instance.renderOnce()
+    instance.renderAt(0, 0.65)
     onProgress?.('interactive')
     logInitPhase('first frame', t0)
 
@@ -129,6 +137,11 @@ export class VolcanoScene {
     }
 
     return instance
+  }
+
+  onEngineeringReadout(listener: EngineeringReadoutListener | null) {
+    this.readoutListener = listener
+    if (listener && this.lastState) listener(this.lastState)
   }
 
   private mountVolcanoGeometry() {
@@ -156,14 +169,10 @@ export class VolcanoScene {
     if (this.ash) return
     this.ash = new AshPlumeSystem()
     this.sparks = new SparkSystem()
+    this.tracers = new ConduitTracerSystem()
     this.scene.add(this.ash.points)
     this.scene.add(this.sparks.points)
-  }
-
-  private renderOnce() {
-    this.controls.update()
-    this.renderer.render(this.scene, this.camera)
-    this.labelRenderer.render(this.scene, this.camera)
+    this.build?.conduit.add(this.tracers.points)
   }
 
   private applyClipPlanes() {
@@ -218,45 +227,90 @@ export class VolcanoScene {
 
   setTime(seconds: number) {
     this.timeSec = seconds
-    this.applyEruptionState()
+    this.renderAt(seconds, this.intensity)
   }
 
   setIntensity(value: number) {
     this.intensity = THREE.MathUtils.clamp(value, 0, 1)
-    this.applyEruptionState()
+    this.renderAt(this.timeSec, this.intensity)
   }
 
-  /** Eruption activity 0–1 from timeline stage + intensity slider. */
-  private activityFactor(): number {
-    const t = this.timeSec
-    let phase = 0
-    if (t < 6) phase = (t / 6) * 0.15
-    else if (t < 10) phase = 0.15 + ((t - 6) / 4) * 0.25
-    else if (t < 14) phase = 0.4 + ((t - 10) / 4) * 0.35
-    else if (t < 24) phase = 0.75 + ((t - 14) / 10) * 0.25
-    else phase = Math.max(0, 1 - (t - 24) / 6)
-    return THREE.MathUtils.clamp(phase * (0.35 + this.intensity * 0.85), 0, 1)
+  /** Deterministic scene + physics state from timeline position. */
+  renderAt(timeSec: number, intensity: number) {
+    const state = computeEruptionState(timeSec, intensity)
+    this.lastState = state
+    this.readoutListener?.(state)
+    this.applyEruptionState(state)
   }
 
-  private applyEruptionState() {
+  getLastState(): EruptionState | null {
+    return this.lastState
+  }
+
+  private applyEruptionState(state: EruptionState) {
     if (!this.build || !this.plumeMesh) return
-    const a = this.activityFactor()
+    const a = state.activity
     const chamberMat = this.build.chamber.material as THREE.MeshStandardMaterial
-    chamberMat.emissiveIntensity = 0.35 + a * 1.4
+    const tNorm = (state.T_magma_C - 950) / 300
+    chamberMat.emissive.setHSL(0.06 + tNorm * 0.02, 1, 0.45 + state.meltFraction * 0.15)
+    chamberMat.emissiveIntensity = 0.35 + a * 1.4 + state.meltFraction * 0.4
+
+    const coreMat = this.build.magmaCore.material as THREE.MeshStandardMaterial
+    coreMat.emissiveIntensity = 0.9 + state.meltFraction * 0.8
+    coreMat.opacity = 0.75 + state.meltFraction * 0.2
+    this.build.magmaCore.scale.set(
+      1.4 * (0.85 + state.chamberFill * 0.2),
+      0.75 * (0.9 + state.chamberFill * 0.15),
+      1.2 * (0.85 + state.chamberFill * 0.2),
+    )
+
     const conduitMat = this.build.conduit.material as THREE.MeshStandardMaterial
-    conduitMat.emissiveIntensity = 0.1 + a * 0.9
-    this.build.craterGlow.intensity = a * 3.5 * this.intensity
-    this.build.lavaFlow.visible = a > 0.35
+    conduitMat.emissiveIntensity = 0.1 + a * 0.9 + (state.Q_m3s > 0 ? 0.35 : 0)
+    const conduitScale = 1 + (state.conduitRadiusM / 1.8 - 1) * 0.15
+    this.build.conduit.scale.set(conduitScale, 1, conduitScale)
+
+    this.build.craterGlow.intensity = a * 3.5 * state.intensity
+    this.build.lavaFlow.visible = a > 0.32 || state.lavaFrontM > 30
     const lavaMat = this.build.lavaFlow.material as THREE.MeshStandardMaterial
-    lavaMat.emissiveIntensity = a * 1.8
+    const thermal = THREE.MathUtils.clamp((state.T_magma_C - 1000) / 250, 0, 1)
+    lavaMat.emissive.setHSL(0.08 - thermal * 0.04, 1, 0.45 + thermal * 0.2)
+    lavaMat.emissiveIntensity = (0.4 + a * 1.8) * (state.Q_m3s > 0 ? 1 : 0.35)
+
+    const frontScene = 1.2 + (state.lavaFrontM / 1500) * 6.5
+    this.build.lavaFlow.scale.set(0.35 + frontScene * 0.12, 1, 0.4 + frontScene * 0.14)
+
+    const crustMat = this.build.lavaCrust.material as THREE.MeshStandardMaterial
+    const crustFrac = THREE.MathUtils.clamp(1 - thermal + state.timeSec * 0.015, 0, 0.85)
+    crustMat.opacity = state.ventOpen ? crustFrac * 0.75 * a : 0
+    this.build.lavaCrust.scale.copy(this.build.lavaFlow.scale)
 
     const plumeMat = this.plumeMesh.material as THREE.MeshStandardMaterial
-    plumeMat.opacity = 0.08 + a * 0.45
-    this.plumeMesh.scale.set(0.6 + a * 1.2, 0.4 + a * 1.6, 0.6 + a * 1.2)
+    plumeMat.opacity = 0.08 + a * 0.48
+    this.plumeMesh.scale.set(0.6 + a * 1.3, 0.4 + a * 1.7, 0.6 + a * 1.3)
     this.plumeMesh.visible = a > 0.12
 
-    const buildUp = this.timeSec < 10 ? Math.sin(this.timeSec * 0.8) * 0.02 : 0
-    this.build.chamber.scale.y = 0.75 + buildUp + a * 0.08
+    const buildUp = state.timeSec < 10 ? Math.sin(state.timeSec * 0.8) * 0.02 : 0
+    this.build.chamber.scale.y = 0.75 + buildUp + a * 0.08 + (state.P_chamber_MPa / 30) * 0.04
+
+    for (let i = 0; i < this.build.geologyLayers.length; i++) {
+      const layer = this.build.geologyLayers[i]!
+      const mat = layer.material as THREE.MeshStandardMaterial
+      mat.emissive = new THREE.Color(0x331100)
+      mat.emissiveIntensity = state.meltFraction * 0.08 * (i / 5)
+    }
+    this.build.dikes.forEach((dike, i) => {
+      const mat = dike.material as THREE.MeshStandardMaterial
+      mat.emissiveIntensity =
+        0.12 + state.meltFraction * 0.25 * (state.timeSec > 5 + i * 2 ? 1 : 0.3)
+    })
+
+    state.structures.forEach((st, i) => {
+      const house = this.build!.houses[i]
+      if (!house) return
+      applyHouseSeverity(house, st.severity, (st.severityIndex % 5) / 5)
+    })
+
+    this.tracers?.renderAt(state.timeSec, state.Q_m3s, a)
   }
 
   private handleResize = () => {
@@ -275,7 +329,8 @@ export class VolcanoScene {
       this.animationId = requestAnimationFrame(loop)
       const dt = Math.min(this.clock.getDelta(), 0.05)
       this.controls.update()
-      const a = this.activityFactor()
+      const state = this.lastState ?? computeEruptionState(this.timeSec, this.intensity)
+      const a = state.activity
       this.ash?.update(dt, a)
       this.sparks?.update(dt, a)
       this.renderer.render(this.scene, this.camera)

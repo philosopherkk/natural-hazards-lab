@@ -1,6 +1,6 @@
 # Volcano Lab
 
-Interactive **3D volcano eruption simulator** built with Vite, TypeScript, and Three.js. Scrub a 30-second timeline, adjust eruption intensity, toggle a cutaway interior view, and read university-level stage narratives in **English** or **Traditional Chinese (zh-TW)**.
+Interactive **3D volcano eruption simulator** (v3) built with Vite, TypeScript, and Three.js. Scrub a 30-second timeline, adjust eruption intensity, toggle a cutaway interior view, watch **slope village destruction** tied to the eruption, and read **engineering readouts** (chamber pressure, η(T), Hagen–Poiseuille flux Q, lava front, structures affected) with university-level narratives in **English** or **Traditional Chinese (zh-TW)**.
 
 ## Requirements
 
@@ -28,7 +28,8 @@ npm run preview
 | Path | Purpose |
 |------|---------|
 | `src/main.ts` | UI wiring, timeline playback, i18n refresh |
-| `src/scene/` | Volcano geometry, particles, WebGL renderer |
+| `src/model/eruptionModel.ts` | Deterministic lumped chamber + conduit physics |
+| `src/scene/` | Volcano geometry, village, particles, WebGL renderer |
 | `src/i18n/` | English and zh-TW copy (stages, legend, help) |
 | `src/version.ts` | Semver and update date shown in the footer |
 
@@ -38,4 +39,4 @@ Space (play/pause), ←/→ (scrub), Home/End, **C** (cutaway), **L** (labels), 
 
 ## Version
 
-**2.0.0** — updated **2026-10-05**.
+**3.0.0** — updated **2026-10-14**.

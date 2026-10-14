@@ -57,4 +57,18 @@ export interface Translations {
   labelCrater: string
   labelLavaFlow: string
   labelPlume: string
+  engineeringHeading: string
+  readoutPChamber: string
+  readoutTMagma: string
+  readoutViscosity: string
+  readoutFlowQ: string
+  readoutEffusion: string
+  readoutLavaFront: string
+  readoutStructures: string
+  readoutMeltFraction: string
+  unitMPa: string
+  unitCelsius: string
+  unitPas: string
+  unitM3s: string
+  unitMeters: string
 }

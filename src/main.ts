@@ -6,6 +6,8 @@ import {
   TIMELINE_DURATION,
   toggleLocale,
 } from './i18n'
+import type { EruptionState } from './model/eruptionModel'
+import { formatEngineeringValue } from './model/eruptionModel'
 import { VolcanoScene, type InitProgressStep } from './scene/VolcanoScene'
 import { APP_VERSION, UPDATE_DATE } from './version'
 
@@ -27,6 +29,14 @@ interface UiRefs {
   labels: HTMLInputElement
   canvasWrap: HTMLElement
   loading: HTMLElement
+  readoutP: HTMLElement
+  readoutT: HTMLElement
+  readoutEta: HTMLElement
+  readoutQ: HTMLElement
+  readoutEffusion: HTMLElement
+  readoutFront: HTMLElement
+  readoutMelt: HTMLElement
+  readoutStructures: HTMLElement
 }
 
 let scene: VolcanoScene | null = null
@@ -49,6 +59,37 @@ function applyTranslations(refs: UiRefs) {
   document.querySelector<HTMLElement>('[data-i18n="cutaway-label"]')!.textContent = t.cutaway
   document.querySelector<HTMLElement>('[data-i18n="labels-label"]')!.textContent = t.labels
   document.querySelector<HTMLElement>('[data-i18n="stage-heading"]')!.textContent = t.stageHeading
+  document.querySelector<HTMLElement>('[data-i18n="engineering-heading"]')!.textContent =
+    t.engineeringHeading
+  document.querySelector<HTMLElement>('[data-i18n="readout-p-chamber"]')!.textContent =
+    t.readoutPChamber
+  document.querySelector<HTMLElement>('[data-i18n="readout-t-magma"]')!.textContent = t.readoutTMagma
+  document.querySelector<HTMLElement>('[data-i18n="readout-viscosity"]')!.textContent =
+    t.readoutViscosity
+  document.querySelector<HTMLElement>('[data-i18n="readout-flow-q"]')!.textContent = t.readoutFlowQ
+  document.querySelector<HTMLElement>('[data-i18n="readout-effusion"]')!.textContent =
+    t.readoutEffusion
+  document.querySelector<HTMLElement>('[data-i18n="readout-lava-front"]')!.textContent =
+    t.readoutLavaFront
+  document.querySelector<HTMLElement>('[data-i18n="readout-melt"]')!.textContent =
+    t.readoutMeltFraction
+  document.querySelector<HTMLElement>('[data-i18n="readout-structures"]')!.textContent =
+    t.readoutStructures
+  document.querySelectorAll<HTMLElement>('[data-i18n="unit-mpa"]').forEach((el) => {
+    el.textContent = t.unitMPa
+  })
+  document.querySelectorAll<HTMLElement>('[data-i18n="unit-celsius"]').forEach((el) => {
+    el.textContent = t.unitCelsius
+  })
+  document.querySelectorAll<HTMLElement>('[data-i18n="unit-pas"]').forEach((el) => {
+    el.textContent = t.unitPas
+  })
+  document.querySelectorAll<HTMLElement>('[data-i18n="unit-m3s"]').forEach((el) => {
+    el.textContent = t.unitM3s
+  })
+  document.querySelectorAll<HTMLElement>('[data-i18n="unit-meters"]').forEach((el) => {
+    el.textContent = t.unitMeters
+  })
   document.querySelector<HTMLElement>('[data-i18n="legend-heading"]')!.textContent = t.legendHeading
   document.querySelector<HTMLElement>('[data-i18n="help-heading"]')!.textContent = t.helpHeading
   refs.helpIntro.textContent = t.helpIntro
@@ -105,10 +146,23 @@ function syncPlayButton(refs: UiRefs) {
   refs.resetBtn.textContent = t.reset
 }
 
+function updateEngineeringReadouts(refs: UiRefs, state: EruptionState) {
+  refs.readoutP.textContent = formatEngineeringValue('P_chamber_MPa', state)
+  refs.readoutT.textContent = formatEngineeringValue('T_magma_C', state)
+  refs.readoutEta.textContent = formatEngineeringValue('eta_Pas', state)
+  refs.readoutQ.textContent = formatEngineeringValue('Q_m3s', state)
+  refs.readoutEffusion.textContent = formatEngineeringValue('Q_m3s', state)
+  refs.readoutFront.textContent = formatEngineeringValue('lavaFrontM', state)
+  refs.readoutMelt.textContent = state.meltFraction.toFixed(2)
+  refs.readoutStructures.textContent = String(state.structuresAffected)
+}
+
 function setTime(sec: number, refs: UiRefs) {
   timeSec = Math.max(0, Math.min(TIMELINE_DURATION, sec))
   refs.timeline.value = String(timeSec)
   scene?.setTime(timeSec)
+  const st = scene?.getLastState()
+  if (st) updateEngineeringReadouts(refs, st)
   updateStagePanel(refs)
 }
 
@@ -158,6 +212,8 @@ function bindUi(refs: UiRefs) {
 
   refs.intensity.addEventListener('input', () => {
     scene?.setIntensity(parseFloat(refs.intensity.value))
+    const st = scene?.getLastState()
+    if (st) updateEngineeringReadouts(refs, st)
   })
 
   refs.cutaway.addEventListener('change', () => {
@@ -254,6 +310,14 @@ function main() {
     labels: document.querySelector('#labels')!,
     canvasWrap: document.querySelector('#canvas-wrap')!,
     loading: document.querySelector('#loading')!,
+    readoutP: document.querySelector('#readout-p')!,
+    readoutT: document.querySelector('#readout-t')!,
+    readoutEta: document.querySelector('#readout-eta')!,
+    readoutQ: document.querySelector('#readout-q')!,
+    readoutEffusion: document.querySelector('#readout-effusion')!,
+    readoutFront: document.querySelector('#readout-front')!,
+    readoutMelt: document.querySelector('#readout-melt')!,
+    readoutStructures: document.querySelector('#readout-structures')!,
   }
 
   refs.timeline.max = String(TIMELINE_DURATION)
@@ -278,6 +342,7 @@ async function initScene(refs: UiRefs) {
     scene.setLabelsVisible(refs.labels.checked)
     scene.setIntensity(parseFloat(refs.intensity.value))
     scene.setTime(0)
+    scene.onEngineeringReadout((state) => updateEngineeringReadouts(refs, state))
     scene.updateLabelTexts({
       chamber: getTranslations().labelChamber,
       conduit: getTranslations().labelConduit,
