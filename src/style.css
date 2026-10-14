@@ -212,8 +212,122 @@ body {
 .readout-row {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 0.5rem;
+  gap: 0.25rem 0.5rem;
   align-items: baseline;
+}
+
+.readout-row .metric-simple,
+.readout-row .metric-formula {
+  grid-column: 1 / -1;
+  text-align: left;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.readout-row .metric-symbol {
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.speed-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+  font-size: 0.88rem;
+}
+
+.speed-label {
+  color: var(--muted);
+  min-width: 6rem;
+}
+
+.speed-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.btn-speed {
+  min-width: 2.75rem;
+  padding: 0.35rem 0.55rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-speed[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: rgba(249, 115, 22, 0.2);
+  color: #fde68a;
+}
+
+.top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.hub-link {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.hub-link:hover {
+  text-decoration: underline;
+}
+
+.hub-layout .hub-pick {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+.hub-grid {
+  flex: 1;
+}
+
+.hazard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.hazard-card {
+  display: block;
+  padding: 1.25rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.hazard-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.hazard-card h3 {
+  margin: 0.5rem 0 0.35rem;
+  font-size: 1.15rem;
+}
+
+.hazard-card p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.hazard-icon {
+  font-size: 2rem;
+  line-height: 1;
 }
 
 .readout-row dt {

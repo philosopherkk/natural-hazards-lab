@@ -34,9 +34,24 @@ export interface EruptionState {
   lavaFrontM: number
   chamberFill: number
   meltFraction: number
+  crystalFraction: number
   ventOpen: boolean
   activity: number
   conduitRadiusM: number
+  /** Ground tilt / strain proxy (μstrain) from chamber pressurization. */
+  groundTiltMicrostrain: number
+  /** Tremor RMS (mm/s) scaled from seismic energy proxy. */
+  tremorRMS_mm_s: number
+  /** SO₂ mass flux (t/d) from degassing activity. */
+  gasFluxSO2_t_d: number
+  /** Thermal output at vent (MW), Q·ρ·c·ΔT sketch. */
+  heatFlux_MW: number
+  /** Structural margin: 1 − demand/yield (dimensionless). */
+  yieldStrengthMargin: number
+  /** Blast dynamic pressure on façades (kPa), q = ½ρu². */
+  dynamicPressure_kPa: number
+  /** Channelized lava depth (m), empirical from effusion. */
+  lavaChannelDepth_m: number
   structures: StructureState[]
   structuresAffected: number
   meanSeverity: number
@@ -176,6 +191,36 @@ export function computeEruptionState(timeSec: number, intensity: number): Erupti
   const meanSeverity =
     structures.reduce((a, s) => a + s.severityIndex, 0) / Math.max(1, structures.length)
 
+  const crystalFraction = clamp(1 - meltFraction, 0.02, 0.8)
+
+  // ε_proxy ∝ (P/P_ref)(fill) mapped to microstrain for flank tilt gauges.
+  const groundTiltMicrostrain = clamp((P_MPa / 18) * fill * 520 + activity * 40, 0, 980)
+
+  // RMS ∝ √(seismic moment rate) ~ activity·√Q (mm/s teaching scale).
+  const tremorRMS_mm_s = clamp(0.04 + activity * 2.8 + Math.sqrt(Math.max(Q, 0)) * 0.65, 0, 6.5)
+
+  // Degassing SO₂: t/d ~ activity·I·vent factor (order-of-magnitude teaching flux).
+  const gasFluxSO2_t_d = clamp(
+    activity * I * (ventOpen ? 1800 : 120) * (0.35 + P_MPa / 28),
+    0,
+    4200,
+  )
+
+  // Q·ρ·c·ΔT with ρ≈2500 kg/m³, c≈1200 J/(kg·K), ΔT from T_C.
+  const deltaT = Math.max(0, T_C - 900)
+  const heatFlux_MW = clamp(Q * 2500 * 1200 * deltaT * 1e-6, 0, 8500)
+
+  // Blast wind speed u (m/s) from eruptive jet proxy; q = ½ρ_air u² (Pa → kPa).
+  const uBlast = activity * (55 + I * 45) * (ventOpen ? 1 : 0.15)
+  const dynamicPressure_kPa = clamp(0.5 * 1.2 * uBlast * uBlast * 1e-3, 0, 28)
+
+  const ashLoadFactor = smoothstep(4, 14, timeSec) * 0.35 * I
+  const yieldStrengthMargin = clamp(1 - dynamicPressure_kPa / 14 - ashLoadFactor - meanSeverity * 0.08, 0.05, 1)
+
+  // Channel depth d ~ k(Q/v)^0.35 with v from effusion width (m).
+  const lavaChannelDepth_m =
+    ventOpen && Q > 0 ? clamp(0.6 + Math.pow(Q * 0.42, 0.38) * 2.2, 0.2, 12) : 0
+
   return {
     timeSec,
     intensity: I,
@@ -187,9 +232,17 @@ export function computeEruptionState(timeSec: number, intensity: number): Erupti
     lavaFrontM,
     chamberFill: fill,
     meltFraction,
+    crystalFraction,
     ventOpen,
     activity,
     conduitRadiusM: rConduit,
+    groundTiltMicrostrain,
+    tremorRMS_mm_s,
+    gasFluxSO2_t_d,
+    heatFlux_MW,
+    yieldStrengthMargin,
+    dynamicPressure_kPa,
+    lavaChannelDepth_m,
     structures,
     structuresAffected: affected,
     meanSeverity,

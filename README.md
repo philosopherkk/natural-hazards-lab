@@ -1,11 +1,27 @@
-# Volcano Lab
+# Natural Hazards Lab (v4.0.0)
 
-Interactive **3D volcano eruption simulator** (v3) built with Vite, TypeScript, and Three.js. Scrub a 30-second timeline, adjust eruption intensity, toggle a cutaway interior view, watch **slope village destruction** tied to the eruption, and read **engineering readouts** (chamber pressure, η(T), Hagen–Poiseuille flux Q, lava front, structures affected) with university-level narratives in **English** or **Traditional Chinese (zh-TW)**.
+Interactive **Vite + TypeScript + Three.js** timelines for four geohazards, with **engineering** and **primary-school (simple)** explanations in **English** and **Traditional Chinese (zh-TW)**.
 
-## Requirements
+## Hub & routes (hash)
 
-- Node.js 18+
-- npm 9+
+| Route | Module |
+|--------|--------|
+| `#/` | Hazard selection hub |
+| `#/volcano` | Volcano eruption (chamber, conduit, village damage, subsurface cutaway) |
+| `#/avalanche` | Snowpack release, valley runout, chalet impacts |
+| `#/tsunami` | Fault slip, wave propagation, coastal inundation |
+| `#/earthquake` | Fault rupture, P/S wave fronts, building damage |
+
+## Controls (all hazards)
+
+- **Timeline** — scrub 0–30 s (deterministic state at time *t*)
+- **Play / Pause / Reverse / Reset**
+- **Playback speed** — **0.5×, 1×, 2×, 4×** (default 1×; stored in `sessionStorage`)
+- **Intensity** — scales scenario severity per module
+- **Simple / Engineering** — toggle readouts and stage narrative (`localStorage`)
+- **Language** — EN ↔ zh-TW (`localStorage`)
+
+Volcano-only: **Cutaway interior**, **Anatomy labels** (keys **C** / **L**).
 
 ## Run locally
 
@@ -14,9 +30,7 @@ npm install
 npm run dev
 ```
 
-Open [http://127.0.0.1:4321](http://127.0.0.1:4321).
-
-## Build
+Open the URL Vite prints (e.g. `http://127.0.0.1:5173/#/`).
 
 ```bash
 npm run build
@@ -25,18 +39,10 @@ npm run preview
 
 ## Project layout
 
-| Path | Purpose |
-|------|---------|
-| `src/main.ts` | UI wiring, timeline playback, i18n refresh |
-| `src/model/eruptionModel.ts` | Deterministic lumped chamber + conduit physics |
-| `src/scene/` | Volcano geometry, village, particles, WebGL renderer |
-| `src/i18n/` | English and zh-TW copy (stages, legend, help) |
-| `src/version.ts` | Semver and update date shown in the footer |
+- `src/hub.ts`, `src/router.ts` — hub and hash routing
+- `src/shared/hazardShell.ts` — shared transport, speed, explain mode, panels
+- `src/model/` — physics sketches (`eruptionModel`, `avalancheModel`, `tsunamiModel`, `earthquakeModel`)
+- `src/scene/` — Three.js scenes per hazard
+- `src/i18n/catalog/` — EN + zh-TW copy for hub and all modules
 
-## Keyboard shortcuts
-
-Space (play/pause), ←/→ (scrub), Home/End, **C** (cutaway), **L** (labels), **R** (reverse).
-
-## Version
-
-**3.0.0** — updated **2026-10-14**.
+**Version:** 4.0.0 · **Updated:** 2026-10-14

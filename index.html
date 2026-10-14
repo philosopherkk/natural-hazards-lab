@@ -4,124 +4,14 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Volcano Lab — interactive 3D eruption timeline with educational stages" />
-    <title>Volcano Lab</title>
+    <meta
+      name="description"
+      content="Natural Hazards Lab — interactive 3D volcano, avalanche, tsunami & earthquake timelines"
+    />
+    <title>Natural Hazards Lab</title>
   </head>
   <body>
-    <div id="app" class="layout">
-      <header class="top-bar">
-        <div class="brand">
-          <h1 data-i18n="title">Volcano Lab</h1>
-          <p class="subtitle" data-i18n="subtitle">Interactive Eruption Timeline</p>
-        </div>
-        <button type="button" id="lang-toggle" class="btn btn-ghost" aria-label="Switch language">
-          中文
-        </button>
-      </header>
-
-      <main class="main-grid">
-        <section class="viewport-panel" aria-labelledby="viewport-heading">
-          <h2 id="viewport-heading" class="visually-hidden">3D viewport</h2>
-          <div id="canvas-wrap" class="canvas-wrap" role="img" aria-label="Volcano model">
-            <p id="loading" class="loading" role="status">Initializing…</p>
-          </div>
-          <div class="transport" role="group" aria-label="Timeline transport">
-            <button type="button" id="play-btn" class="btn btn-primary">Play</button>
-            <button type="button" id="reverse-btn" class="btn" aria-pressed="false">Reverse</button>
-            <button type="button" id="reset-btn" class="btn">Reset</button>
-          </div>
-          <label class="control-row">
-            <span data-i18n="timeline-label">Timeline</span>
-            <input
-              type="range"
-              id="timeline"
-              min="0"
-              max="30"
-              step="0.1"
-              value="0"
-              aria-valuemin="0"
-              aria-valuemax="30"
-            />
-          </label>
-          <label class="control-row">
-            <span data-i18n="intensity-label">Eruption intensity</span>
-            <input type="range" id="intensity" min="0" max="1" step="0.01" value="0.65" />
-          </label>
-          <div class="toggles">
-            <label class="toggle">
-              <input type="checkbox" id="cutaway" checked />
-              <span data-i18n="cutaway-label">Cutaway interior</span>
-            </label>
-            <label class="toggle">
-              <input type="checkbox" id="labels" checked />
-              <span data-i18n="labels-label">Anatomy labels</span>
-            </label>
-          </div>
-        </section>
-
-        <aside class="info-panel">
-          <article class="stage-card" aria-live="polite">
-            <h2 data-i18n="stage-heading">Eruption stage</h2>
-            <h3 id="stage-title" class="stage-title"></h3>
-            <p id="stage-time" class="stage-time"></p>
-            <p id="stage-desc" class="stage-desc"></p>
-          </article>
-
-          <section class="side-block engineering-panel" aria-labelledby="engineering-heading">
-            <h2 id="engineering-heading" data-i18n="engineering-heading">Engineering readouts</h2>
-            <dl class="readout-grid" id="readout-grid">
-              <div class="readout-row">
-                <dt data-i18n="readout-p-chamber">Chamber overpressure</dt>
-                <dd><span id="readout-p">—</span> <span class="unit" data-i18n="unit-mpa">MPa</span></dd>
-              </div>
-              <div class="readout-row">
-                <dt data-i18n="readout-t-magma">Magma temperature</dt>
-                <dd><span id="readout-t">—</span> <span class="unit" data-i18n="unit-celsius">°C</span></dd>
-              </div>
-              <div class="readout-row">
-                <dt data-i18n="readout-viscosity">Viscosity η(T)</dt>
-                <dd><span id="readout-eta">—</span> <span class="unit" data-i18n="unit-pas">Pa·s</span></dd>
-              </div>
-              <div class="readout-row">
-                <dt data-i18n="readout-flow-q">Conduit flux Q</dt>
-                <dd><span id="readout-q">—</span> <span class="unit" data-i18n="unit-m3s">m³/s</span></dd>
-              </div>
-              <div class="readout-row">
-                <dt data-i18n="readout-effusion">Effusion rate</dt>
-                <dd><span id="readout-effusion">—</span> <span class="unit" data-i18n="unit-m3s">m³/s</span></dd>
-              </div>
-              <div class="readout-row">
-                <dt data-i18n="readout-lava-front">Lava front (flank)</dt>
-                <dd><span id="readout-front">—</span> <span class="unit" data-i18n="unit-meters">m</span></dd>
-              </div>
-              <div class="readout-row">
-                <dt data-i18n="readout-melt">Melt fraction</dt>
-                <dd><span id="readout-melt">—</span></dd>
-              </div>
-              <div class="readout-row">
-                <dt data-i18n="readout-structures">Structures affected</dt>
-                <dd><span id="readout-structures">0</span> / 8</dd>
-              </div>
-            </dl>
-          </section>
-
-          <section class="side-block">
-            <h2 data-i18n="legend-heading">Legend</h2>
-            <ul id="legend-list" class="legend-list"></ul>
-          </section>
-
-          <section class="side-block">
-            <h2 data-i18n="help-heading">Controls &amp; accessibility</h2>
-            <p id="help-intro" class="help-intro"></p>
-            <ul id="keyboard-list" class="keyboard-list"></ul>
-          </section>
-        </aside>
-      </main>
-
-      <footer class="site-footer">
-        <div id="footer-meta" class="footer-meta"></div>
-      </footer>
-    </div>
+    <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
