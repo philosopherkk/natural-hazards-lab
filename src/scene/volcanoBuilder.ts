@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { fbm } from './noise'
 import { buildFlankChannel, buildGulliedCone } from './meshForms'
+import { createLavaMaterial } from './surfaceShaders'
 import { getPbrLibrary, pbrMaterial } from './pbrLibrary'
 import { buildVillage, type HouseBuild } from './villageBuilder'
 
@@ -184,12 +185,7 @@ export function buildVolcano(): VolcanoBuildResult {
   root.add(conduit)
 
   const channel = buildFlankChannel(0.42)
-  const flowMat = lavaMat.clone()
-  if (flowMat.map) {
-    flowMat.map = flowMat.map.clone()
-    flowMat.map.wrapS = flowMat.map.wrapT = THREE.RepeatWrapping
-    flowMat.map.needsUpdate = true
-  }
+  const flowMat = createLavaMaterial()
   const lavaFlow = new THREE.Mesh(channel.geometry, flowMat)
   lavaFlow.receiveShadow = true
   root.add(lavaFlow)
@@ -209,7 +205,7 @@ export function buildVolcano(): VolcanoBuildResult {
   const lavaCrust = new THREE.Mesh(crustChannel.geometry, crustMat)
   root.add(lavaCrust)
 
-  const craterPool = new THREE.Mesh(new THREE.CircleGeometry(0.46, 36), flowMat)
+  const craterPool = new THREE.Mesh(new THREE.CircleGeometry(0.46, 36), lavaMat)
   craterPool.rotation.x = -Math.PI / 2
   craterPool.position.y = 4.42
   root.add(craterPool)

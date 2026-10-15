@@ -125,11 +125,13 @@ export class AvalancheScene {
     }
     snowGeo.computeVertexNormals()
     const snowMat = pbrMaterial(lib.snow, {
-      repeat: [7, 6],
+      repeat: [8, 7],
       color: 0xf7fbff,
-      normalScale: 0.4,
-      roughness: 0.72,
-      metalness: 0.04,
+      normalScale: 0.85,
+      roughness: 0.78,
+      metalness: 0.02,
+      detailRepeat: 3.2,
+      detailStrength: 0.32,
     })
     snowMat.polygonOffset = true
     snowMat.polygonOffsetFactor = -1
@@ -494,10 +496,12 @@ export class AvalancheScene {
       const v = hash2(i, 4, 8)
       const life = (s.timeSec * 0.4 + u) % 1
       const ang = v * Math.PI * 2
-      const rad = life * (1.1 + runNorm * 3.6)
-      arr[i * 3] = frontX - life * 2.2 + Math.cos(ang) * rad * 0.45
-      arr[i * 3 + 1] = frontY + 0.5 + life * (1.4 + runNorm * 3.2)
-      arr[i * 3 + 2] = Math.sin(ang) * rad
+      const sheet = u < 0.65
+      const ahead = sheet ? 0.4 + life * (1.6 + runNorm * 2.4) : -life * 1.4
+      const spread = sheet ? (v - 0.5) * (2.2 + runNorm * 3.2) : Math.sin(ang) * life * 2.2
+      arr[i * 3] = frontX + ahead
+      arr[i * 3 + 1] = frontY + (sheet ? 0.25 + life * 0.9 : 0.6 + life * 1.8)
+      arr[i * 3 + 2] = spread
     }
     pos.needsUpdate = true
     const mat = this.powder.material as THREE.PointsMaterial

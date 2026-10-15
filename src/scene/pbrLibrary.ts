@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { fbmPeriodic, hash2 } from './noise'
 import { yieldFrame } from './initTiming'
+import { applySurfaceDetail } from './surfaceShaders'
 
 const SIZE = 256
 
@@ -473,6 +474,8 @@ export function pbrMaterial(
     opacity?: number
     side?: THREE.Side
     depthWrite?: boolean
+    detailRepeat?: number
+    detailStrength?: number
   } = {},
 ): THREE.MeshStandardMaterial {
   const [rx, ry] = opts.repeat ?? [1, 1]
@@ -495,6 +498,7 @@ export function pbrMaterial(
     side: opts.side ?? THREE.FrontSide,
   })
   if (opts.depthWrite === false) mat.depthWrite = false
+  applySurfaceDetail(mat, opts.detailRepeat ?? 4.5, opts.detailStrength ?? 0.72)
   return mat
 }
 

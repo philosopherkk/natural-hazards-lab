@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { StructureSeverity } from '../model/eruptionModel'
 import { getPbrLibrary, pbrMaterial } from './pbrLibrary'
+import { contactDisc } from './surfaceShaders'
 
 export interface HouseBuild {
   root: THREE.Group
@@ -29,13 +30,13 @@ let windowMaterial: THREE.MeshPhysicalMaterial | null = null
 function glassMaterial(): THREE.MeshPhysicalMaterial {
   if (!windowMaterial) {
     windowMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0xc5dcea,
-      roughness: 0.04,
+      color: 0xffe4bf,
+      emissive: 0xffb15a,
+      emissiveIntensity: 1.05,
+      roughness: 0.08,
       metalness: 0.02,
       transparent: true,
-      opacity: 0.55,
-      clearcoat: 0.6,
-      clearcoatRoughness: 0.08,
+      opacity: 0.88,
     })
   }
   return windowMaterial
@@ -44,8 +45,20 @@ function glassMaterial(): THREE.MeshPhysicalMaterial {
 function makeHouse(): Omit<HouseBuild, 'distanceScene'> {
   const lib = getPbrLibrary()
   const root = new THREE.Group()
-  const wallMat = pbrMaterial(lib.stucco, { repeat: [2, 2], normalScale: 0.7, roughness: 0.95 })
-  const roofMat = pbrMaterial(lib.roof, { repeat: [3, 2], normalScale: 1.1, roughness: 0.88 })
+  const wallMat = pbrMaterial(lib.stucco, {
+    repeat: [3, 3],
+    normalScale: 1.1,
+    roughness: 0.92,
+    detailRepeat: 5,
+    detailStrength: 0.85,
+  })
+  const roofMat = pbrMaterial(lib.roof, {
+    repeat: [4, 3],
+    normalScale: 1.8,
+    roughness: 0.78,
+    detailRepeat: 3,
+    detailStrength: 0.9,
+  })
   const woodMat = pbrMaterial(lib.bark, { repeat: [1, 2], normalScale: 0.8, color: 0xc4a080 })
 
   const walls = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.78, 0.9), wallMat)
@@ -71,6 +84,7 @@ function makeHouse(): Omit<HouseBuild, 'distanceScene'> {
   chimney.castShadow = true
   roof.add(chimney)
   root.add(roof)
+  root.add(contactDisc(0.85))
 
   const door = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.38, 0.22), woodMat)
   door.position.set(0.54, 0.22, 0)
@@ -177,7 +191,8 @@ export function applyHouseSeverity(house: HouseBuild, severity: StructureSeverit
   let crackOp = 0
 
   house.walls.rotation.z = 0
-  house.roof.rotation.z = 0
+  house.roof.position.set(0, 0, 0)
+  house.roof.rotation.set(0, 0, 0)
   house.walls.scale.y = 1
   house.root.position.y = 0.02
   house.root.scale.y = 1
@@ -242,8 +257,9 @@ export function applyHouseSeverity(house: HouseBuild, severity: StructureSeverit
   ashMat.opacity = ashOp
   const crackMat = house.cracks.material as THREE.MeshStandardMaterial
   crackMat.opacity = crackOp
-  house.roof.position.y = -roofSink
-  house.roof.rotation.z = wallTilt * 0.6
+  house.roof.position.set(wallTilt * 0.95, -roofSink * 0.15, wallTilt * 0.2)
+  house.roof.rotation.z = wallTilt * 1.25
+  house.roof.rotation.x = wallTilt * 0.45
   house.walls.rotation.z = wallTilt * 0.4
   house.walls.scale.y = 1 - buried * 0.45 - (severity === 'collapse' ? 0.28 : 0)
   house.fireGlow.intensity = fire * 1.8

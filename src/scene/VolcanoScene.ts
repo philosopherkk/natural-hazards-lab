@@ -4,6 +4,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 import { computeEruptionState, type EruptionState } from '../model/eruptionModel'
 import { buildVolcano } from './volcanoBuilder'
 import { lumpyCloud, revealChannel } from './meshForms'
+import { createPlumeMaterial } from './surfaceShaders'
 import { AshPlumeSystem, SparkSystem } from './particles'
 import { ConduitTracerSystem } from './conduitTracers'
 import { applyHouseSeverity } from './villageBuilder'
@@ -129,18 +130,11 @@ export class VolcanoScene {
 
     const lib = getPbrLibrary()
     this.plumeGroup = new THREE.Group()
-    const plumeColors = [0x2e2926, 0x4a433c, 0x6a635c, 0x8c8680, 0xb2ada6, 0xd0ccc6, 0xe4e1dc]
+    const plumeColors = [0x5c5956, 0x7a7774, 0x9a9794, 0xb8b6b3, 0xd0cecb, 0xe4e2df]
     for (let i = 0; i < plumeColors.length; i++) {
       const mesh = new THREE.Mesh(
-        lumpyCloud(0.7 + i * 0.22, 3 + i * 1.7),
-        new THREE.MeshStandardMaterial({
-          color: plumeColors[i],
-          transparent: true,
-          opacity: 0.22,
-          roughness: 1,
-          metalness: 0,
-          depthWrite: false,
-        }),
+        lumpyCloud(0.55 + i * 0.28, 3 + i * 1.7),
+        createPlumeMaterial(plumeColors[i]!, 0.22 + i * 0.03),
       )
       mesh.position.y = 5.4 + i * 0.95
       this.plumeGroup.add(mesh)
@@ -271,11 +265,10 @@ export class VolcanoScene {
     this.build.conduit.scale.set(conduitScale, 1, conduitScale)
 
     this.build.craterGlow.intensity = a * 4.2 * state.intensity
-    const lavaMat = this.build.lavaFlow.material as THREE.MeshStandardMaterial
+    const lavaMat = this.build.lavaFlow.material as THREE.ShaderMaterial
     const thermal = THREE.MathUtils.clamp((state.T_magma_C - 1000) / 250, 0, 1)
-    lavaMat.emissive.setHSL(0.08 - thermal * 0.04, 1, 0.45 + thermal * 0.2)
-    lavaMat.emissiveIntensity = (0.55 + a * 2.1) * (state.Q_m3s > 0 || state.ventOpen ? 1 : 0.2)
-    if (lavaMat.map) lavaMat.map.offset.y = state.timeSec * 0.02
+    lavaMat.uniforms.uHeat!.value = (0.45 + a * 1.5) * (state.Q_m3s > 0 || state.ventOpen ? 1 : 0.25)
+    lavaMat.uniforms.uTime!.value = state.timeSec
 
     const reach = state.ventOpen
       ? THREE.MathUtils.clamp(Math.max((state.timeSec - 9.5) / 14, state.lavaFrontM / 500), 0, 1)
@@ -302,10 +295,10 @@ export class VolcanoScene {
     this.plumeGroup.visible = a > 0.08
     this.plumeGroup.children.forEach((child, i) => {
       const mesh = child as THREE.Mesh
-      const mat = mesh.material as THREE.MeshStandardMaterial
-      const grow = 0.85 + a * (1.6 + i * 0.35)
-      mesh.scale.set(grow * (0.7 + i * 0.28), (0.9 + a * 1.4) * (1 + i * 0.08), grow * (0.65 + i * 0.22))
-      mat.opacity = (0.16 + a * 0.28) * (1 - i * 0.08)
+      const mat = mesh.material as THREE.ShaderMaterial
+      const grow = 0.7 + a * (1.15 + i * 0.22)
+      mesh.scale.set(grow * (0.85 + i * 0.22), (0.75 + a * 1.05) * (1 + i * 0.12), grow * (0.8 + i * 0.18))
+      mat.uniforms.uOpacity!.value = (0.12 + a * 0.2) * (1 - i * 0.08)
       mesh.position.y = 5.3 + i * (0.7 + a * 0.85)
       mesh.position.x = a * 0.55 * i + Math.sin(state.timeSec * 0.15 + i) * 0.12
       mesh.position.z = Math.cos(state.timeSec * 0.11 + i * 0.8) * a * 0.35 * i

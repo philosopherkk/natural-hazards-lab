@@ -10,7 +10,8 @@ function coastHeight(x: number, z: number): number {
   const n = (fbm(x * 0.32, z * 0.32, 14, 3) - 0.5) * 0.18
   return Math.max(0, beach + dune + town + n)
 }
-import { ensurePbrLibraryAsync, floodMaterial, getPbrLibrary, pbrMaterial, waterMaterial } from './pbrLibrary'
+import { ensurePbrLibraryAsync, getPbrLibrary, pbrMaterial } from './pbrLibrary'
+import { contactDisc, createBoreMaterial, createSeaMaterial } from './surfaceShaders'
 import { scheduleIdle, yieldFrame } from './initTiming'
 import {
   addAtmosphere,
@@ -85,7 +86,7 @@ export class TsunamiScene {
     const oceanGeo = new THREE.PlaneGeometry(52, 46, 96, 80)
     oceanGeo.rotateX(-Math.PI / 2)
     this.oceanBase = (oceanGeo.attributes.position as THREE.BufferAttribute).array.slice() as Float32Array
-    this.water = new THREE.Mesh(oceanGeo, waterMaterial(lib.waterNormal))
+    this.water = new THREE.Mesh(oceanGeo, createSeaMaterial(0.9))
     this.water.position.y = this.baseWaterY
     this.scene.add(this.water)
 
@@ -174,15 +175,16 @@ export class TsunamiScene {
       right.castShadow = true
       const glass = new THREE.Mesh(
         new THREE.PlaneGeometry(0.18, 0.16),
-        new THREE.MeshPhysicalMaterial({
-          color: 0xb7d4e8,
-          roughness: 0.05,
-          transparent: true,
-          opacity: 0.62,
+        new THREE.MeshStandardMaterial({
+          color: 0xffe2b8,
+          emissive: 0xffaa55,
+          emissiveIntensity: 0.9,
+          roughness: 0.12,
+          metalness: 0.02,
         }),
       )
       glass.position.set(0, 0.28 * floors, 0.39)
-      g.add(body, left, right, glass)
+      g.add(body, left, right, glass, contactDisc(0.7))
       const col = i % 5
       const row = Math.floor(i / 5)
       const hx = 10.4 + row * 1.7
@@ -211,7 +213,7 @@ export class TsunamiScene {
     this.waveRing.position.y = this.baseWaterY + 0.08
     this.scene.add(this.waveRing)
 
-    this.floodPlane = new THREE.Mesh(new THREE.PlaneGeometry(8, 16, 20, 18), floodMaterial(lib.waterNormal))
+    this.floodPlane = new THREE.Mesh(new THREE.PlaneGeometry(8, 16, 20, 18), createSeaMaterial(0.55))
     this.floodPlane.rotation.x = -Math.PI / 2
     this.floodPlane.position.set(11.4, 0, 0)
     this.floodPlane.visible = false
@@ -240,18 +242,8 @@ export class TsunamiScene {
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
     geo.setIndex(indices)
-    const mat = new THREE.MeshPhysicalMaterial({
-      color: 0xd7f3ff,
-      roughness: 0.08,
-      metalness: 0.02,
-      normalMap: normal,
-      normalScale: new THREE.Vector2(0.25, 0.25),
-      transparent: true,
-      opacity: 0.82,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    })
-    const mesh = new THREE.Mesh(geo, mat)
+    void normal
+    const mesh = new THREE.Mesh(geo, createBoreMaterial())
     mesh.frustumCulled = false
     this.scene.add(mesh)
     return mesh
@@ -286,7 +278,6 @@ export class TsunamiScene {
     attr.needsUpdate = true
     this.bore.geometry.computeVertexNormals()
     this.bore.visible = height > 0.25 && travel > 0.05 && travel < 0.98
-    ;(this.bore.material as THREE.MeshPhysicalMaterial).opacity = 0.55 + Math.min(height, 2) * 0.15
   }
 
   setTime(t: number) {
@@ -328,10 +319,9 @@ export class TsunamiScene {
     pos.needsUpdate = true
     this.water.geometry.computeVertexNormals()
 
-    const waterMat = this.water.material as THREE.MeshPhysicalMaterial
-    if (waterMat.normalMap) {
-      waterMat.normalMap.offset.set(s.timeSec * 0.018, s.timeSec * 0.011)
-    }
+    const waterMat = this.water.material as THREE.ShaderMaterial
+    waterMat.uniforms.uTime!.value = s.timeSec
+    waterMat.uniforms.uCamPos!.value.copy(this.camera.position)
     this.water.position.y = this.baseWaterY + s.inundationDepth_m * 0.04
 
     const slip = THREE.MathUtils.clamp(s.faultSlip_m, 0, 12)
@@ -345,15 +335,17 @@ export class TsunamiScene {
     ;(this.waveRing.material as THREE.MeshBasicMaterial).opacity = 0.08 + s.waveHeight_m * 0.03
 
     this.shapeBore(frontX, Math.max(0.35, s.waveHeight_m * 0.85 * (1 + travel * 1.6)), travel)
+    const boreMat = this.bore.material as THREE.ShaderMaterial
+    boreMat.uniforms.uTime!.value = s.timeSec
+    boreMat.uniforms.uCamPos!.value.copy(this.camera.position)
 
     const flood = s.inundationDepth_m > 0.35
     this.floodPlane.visible = flood
     this.floodPlane.position.set(11.4, coastHeight(11.4, 0) + 0.08 + s.inundationDepth_m * 0.12, 0)
-    const floodMat = this.floodPlane.material as THREE.MeshPhysicalMaterial
-    floodMat.opacity = THREE.MathUtils.clamp(0.22 + s.inundationDepth_m * 0.06, 0.2, 0.62)
-    if (floodMat.normalMap) {
-      floodMat.normalMap.offset.set(s.timeSec * 0.01, s.timeSec * 0.006)
-    }
+    const floodMat = this.floodPlane.material as THREE.ShaderMaterial
+    floodMat.uniforms.uTime!.value = s.timeSec
+    floodMat.uniforms.uCamPos!.value.copy(this.camera.position)
+    floodMat.uniforms.uAlpha!.value = THREE.MathUtils.clamp(0.32 + s.inundationDepth_m * 0.08, 0.28, 0.7)
     const floodPos = this.floodPlane.geometry.attributes.position as THREE.BufferAttribute
     for (let i = 0; i < floodPos.count; i++) {
       const x = floodPos.getX(i)

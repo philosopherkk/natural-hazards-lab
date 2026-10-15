@@ -152,10 +152,11 @@ export function addOutdoorLighting(
   preset: AtmospherePreset = 'alpine',
 ): THREE.DirectionalLight {
   const p = ATMOSPHERE[preset]
-  const hemi = new THREE.HemisphereLight(p.hemiSky, p.hemiGround, 0.46)
+  const hemi = new THREE.HemisphereLight(p.hemiSky, p.hemiGround, 0.26)
   scene.add(hemi)
 
-  const sun = new THREE.DirectionalLight(p.sun, p.sunIntensity)
+  const sun = new THREE.DirectionalLight(p.sun, p.sunIntensity * 1.12)
+  sun.color.offsetHSL(0.02, 0.08, 0.02)
   sun.position.set(8, 14, 6)
   sun.castShadow = true
   sun.shadow.mapSize.set(1024, 1024)
