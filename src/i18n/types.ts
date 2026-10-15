@@ -87,6 +87,8 @@ export interface CommonCopy {
   footerVersion: string
   footerUpdated: string
   loading: string
+  loadingFailed: string
+  webglUnavailable: string
   playbackSpeed: string
   playbackSpeedAria: string
   playbackSpeedOptionAria: (rate: number) => string

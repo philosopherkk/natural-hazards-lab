@@ -19,6 +19,8 @@ export const zhTWCatalog: LocaleCatalog = {
     footerVersion: '版本',
     footerUpdated: '更新日期',
     loading: '正在初始化 WebGL 場景…',
+    loadingFailed: '場景載入失敗',
+    webglUnavailable: '此瀏覽器無法使用 WebGL。請啟用硬體加速或改用 Chrome、Firefox、Edge。',
     playbackSpeed: '播放速度',
     playbackSpeedAria: '時間軸播放速度倍率',
     playbackSpeedOptionAria: (rate: number) => `${rate} 倍速播放`,

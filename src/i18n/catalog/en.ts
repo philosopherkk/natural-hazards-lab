@@ -19,6 +19,9 @@ export const enCatalog: LocaleCatalog = {
     footerVersion: 'Version',
     footerUpdated: 'Updated',
     loading: 'Initializing WebGL scene…',
+    loadingFailed: 'Scene failed to load',
+    webglUnavailable:
+      'WebGL is unavailable in this browser. Enable hardware acceleration or try Chrome, Firefox, or Edge.',
     playbackSpeed: 'Playback speed',
     playbackSpeedAria: 'Timeline playback speed multiplier',
     playbackSpeedOptionAria: (rate: number) => `${rate}× playback speed`,

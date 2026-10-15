@@ -1,14 +1,16 @@
 import { computeAvalancheState } from '../model/avalancheModel'
-import { getHazardCopy } from '../i18n'
+import { getCatalog, getHazardCopy } from '../i18n'
 import { formatAvalancheMetric } from '../shared/formatMetricValue'
 import { mountHazardShell } from '../shared/hazardShell'
+import { hazardLoadingMessage } from '../shared/hazardSceneInit'
 import { AvalancheScene } from '../scene/AvalancheScene'
+import { WebGLUnavailableError } from '../scene/sceneBootstrap'
 
 export function mountAvalancheApp(): () => void {
   let scene: AvalancheScene | null = null
   let intensity = 0.65
 
-  return mountHazardShell({
+  const shellTeardown = mountHazardShell({
     hazard: 'avalanche',
     formatMetric: (id) =>
       formatAvalancheMetric(id, scene?.getState() ?? computeAvalancheState(0, intensity)),
@@ -19,14 +21,33 @@ export function mountAvalancheApp(): () => void {
     onTimeChange: (t) => scene?.setTime(t),
     onMount: async (refs) => {
       const copy = getHazardCopy('avalanche')
+      const common = getCatalog().common
       refs.loading.textContent = copy.loadingWebgl
-      scene = await AvalancheScene.create(refs.canvasWrap)
-      intensity = parseFloat(refs.intensity.value)
-      scene.setIntensity(intensity)
-      scene.setTime(0)
-      refs.loading.hidden = true
-      refs.refreshReadouts()
-      scene.start()
+      try {
+        scene = await AvalancheScene.create(refs.canvasWrap, (step) => {
+          refs.loading.textContent = hazardLoadingMessage('avalanche', step)
+        })
+        intensity = parseFloat(refs.intensity.value)
+        scene.setIntensity(intensity)
+        scene.setTime(0)
+        scene.start()
+        refs.loading.hidden = true
+        refs.refreshReadouts()
+      } catch (err) {
+        const msg =
+          err instanceof WebGLUnavailableError
+            ? common.webglUnavailable
+            : err instanceof Error
+              ? err.message
+              : String(err)
+        refs.loading.textContent = `${common.loadingFailed}: ${msg}`
+      }
     },
   })
+
+  return () => {
+    scene?.dispose()
+    scene = null
+    shellTeardown()
+  }
 }

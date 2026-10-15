@@ -8,7 +8,7 @@ export function mountVolcanoApp(): () => void {
   let scene: VolcanoScene | null = null
   let intensity = 0.65
 
-  return mountHazardShell({
+  const shellTeardown = mountHazardShell({
     hazard: 'volcano',
     defaultIntensity: intensity,
     extraKeyboard: [
@@ -30,6 +30,12 @@ export function mountVolcanoApp(): () => void {
     onTimeChange: (t) => scene?.setTime(t),
     onMount: (refs) => initVolcano(refs),
   })
+
+  return () => {
+    scene?.dispose()
+    scene = null
+    shellTeardown()
+  }
 
   async function initVolcano(refs: HazardShellRefs) {
     const copy = getHazardCopy('volcano')

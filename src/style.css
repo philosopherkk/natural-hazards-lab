@@ -104,6 +104,38 @@ body {
   z-index: 2;
 }
 
+.loading[hidden] {
+  display: none !important;
+}
+
+.webgl-fault {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-content: center;
+  gap: 0.5rem;
+  padding: 1.25rem;
+  text-align: center;
+  background: rgba(15, 20, 25, 0.92);
+  border-radius: 8px;
+}
+
+.webgl-fault-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #fca5a5;
+}
+
+.webgl-fault-body,
+.webgl-fault-hint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted, #94a3b8);
+  max-width: 28rem;
+}
+
 .transport {
   display: flex;
   flex-wrap: wrap;

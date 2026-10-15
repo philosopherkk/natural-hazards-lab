@@ -1,4 +1,4 @@
-# Natural Hazards Lab (v4.0.0)
+# Natural Hazards Lab (v4.1.0)
 
 Interactive **Vite + TypeScript + Three.js** timelines for four geohazards, with **engineering** and **primary-school (simple)** explanations in **English** and **Traditional Chinese (zh-TW)**.
 
