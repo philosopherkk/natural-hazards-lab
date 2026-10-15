@@ -1,13 +1,14 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { computeAvalancheState, type AvalancheState } from '../model/avalancheModel'
-import { getRockTextures } from './textures'
-import { scheduleIdle } from './initTiming'
+import { fbm, hash2, mulberry32 } from './noise'
+import { ensurePbrLibraryAsync, getPbrLibrary, pbrMaterial } from './pbrLibrary'
+import { scheduleIdle, yieldFrame } from './initTiming'
 import {
+  addAtmosphere,
   addOutdoorLighting,
   bindResize,
   createStandardRenderer,
-  runSceneBootstrap,
   type SceneInitStep,
 } from './sceneBootstrap'
 
@@ -16,8 +17,9 @@ export type AvalancheInitStep = SceneInitStep
 function slopeHeight(x: number, z: number): number {
   const along = -x * 0.38 + z * 0.08
   const ridge = Math.exp(-((x + 4) ** 2) / 18) * 3.2
-  const noise = Math.sin(x * 0.7) * 0.15 + Math.cos(z * 0.5) * 0.12
-  return Math.max(0, along + ridge + noise)
+  const n = (fbm(x * 0.32, z * 0.32, 4, 4) - 0.5) * 0.7
+  const gully = Math.sin(z * 0.35) * 0.22 * Math.exp(-((x + 2) ** 2) / 30)
+  return Math.max(0, along + ridge + n + gully)
 }
 
 export class AvalancheScene {
@@ -29,35 +31,32 @@ export class AvalancheScene {
   private terrain!: THREE.Mesh
   private snowCap!: THREE.Mesh
   private fracture!: THREE.Mesh
-  private flowCore!: THREE.Mesh
-  private flowTail!: THREE.Mesh
+  private slabs: THREE.Mesh[] = []
+  private flowRibbon!: THREE.Mesh
+  private flowPositions!: Float32Array
   private runoutFan!: THREE.Mesh
-  private powder!: THREE.Points
-  private powderVel = new Float32Array(0)
+  private powder: THREE.Points | null = null
   private trees = new THREE.Group()
   private chalets: THREE.Group[] = []
   private debris: THREE.Mesh[] = []
-  private clock = new THREE.Clock()
   private intensity = 0.65
   private timeSec = 0
   private raf = 0
-  private lastFlow = 0
 
   private constructor(container: HTMLElement) {
-    this.scene.background = new THREE.Color(0x9ec5e8)
-    this.scene.fog = new THREE.FogExp2(0xb8d4f0, 0.032)
+    addAtmosphere(this.scene, 'alpine')
 
-    this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 220)
+    this.camera = new THREE.PerspectiveCamera(40, 1, 0.1, 240)
     this.camera.position.set(16, 11, 18)
 
     this.renderer = createStandardRenderer(container)
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
     this.controls.dampingFactor = 0.06
-    this.controls.target.set(2, 3.5, 0)
-    this.controls.maxPolarAngle = Math.PI / 2 - 0.06
+    this.controls.target.set(2, 3.2, 0)
+    this.controls.maxPolarAngle = Math.PI / 2 - 0.04
 
-    addOutdoorLighting(this.scene, 16)
+    addOutdoorLighting(this.scene, 18, 'alpine')
     this.unbindResize = bindResize(container, this.camera, this.renderer)
   }
 
@@ -65,13 +64,22 @@ export class AvalancheScene {
     container: HTMLElement,
     onProgress?: (step: AvalancheInitStep) => void,
   ): Promise<AvalancheScene> {
+    onProgress?.('webgl')
+    await yieldFrame()
     const instance = new AvalancheScene(container)
-    await runSceneBootstrap(onProgress, () => instance.buildWorld())
+    onProgress?.('terrain')
+    await ensurePbrLibraryAsync()
+    await yieldFrame()
+    onProgress?.('model')
+    instance.buildWorld()
+    await yieldFrame()
     instance.applyState(computeAvalancheState(0, instance.intensity))
     instance.renderOnce()
+    onProgress?.('interactive')
 
     scheduleIdle(() => {
       instance.mountPowder()
+      instance.applyState(instance.getState())
       onProgress?.('effects')
     })
 
@@ -79,9 +87,9 @@ export class AvalancheScene {
   }
 
   private buildWorld() {
-    const { map, roughnessMap, normalMap } = getRockTextures()
+    const lib = getPbrLibrary()
 
-    const geo = new THREE.PlaneGeometry(36, 28, 64, 48)
+    const geo = new THREE.PlaneGeometry(36, 28, 96, 72)
     geo.rotateX(-Math.PI / 2)
     const pos = geo.attributes.position as THREE.BufferAttribute
     for (let i = 0; i < pos.count; i++) {
@@ -93,13 +101,7 @@ export class AvalancheScene {
 
     this.terrain = new THREE.Mesh(
       geo,
-      new THREE.MeshStandardMaterial({
-        map,
-        roughnessMap,
-        normalMap,
-        color: 0x6b5344,
-        roughness: 0.92,
-      }),
+      pbrMaterial(lib.rock, { repeat: [6, 5], color: 0xb09888, normalScale: 1.2, roughness: 0.94 }),
     )
     this.terrain.receiveShadow = true
     this.scene.add(this.terrain)
@@ -110,71 +112,75 @@ export class AvalancheScene {
       const x = snowPos.getX(i)
       const z = snowPos.getZ(i)
       const h = slopeHeight(x, z)
-      snowPos.setY(i, h + (h > 1.8 ? 0.22 + Math.random() * 0.06 : 0))
+      const cover = THREE.MathUtils.smoothstep(h, 0.05, 0.9)
+      const thick = cover * (0.08 + fbm(x * 0.8, z * 0.8, 11, 2) * 0.1)
+      snowPos.setY(i, cover < 0.02 ? h - 0.12 : h + thick + 0.02)
     }
     snowGeo.computeVertexNormals()
-    this.snowCap = new THREE.Mesh(
-      snowGeo,
-      new THREE.MeshStandardMaterial({
-        color: 0xf4f9ff,
-        roughness: 0.82,
-        metalness: 0.02,
-        transparent: true,
-        opacity: 0.95,
-      }),
-    )
+    const snowMat = pbrMaterial(lib.snow, {
+      repeat: [7, 6],
+      color: 0xf7fbff,
+      normalScale: 0.4,
+      roughness: 0.72,
+      metalness: 0.04,
+    })
+    snowMat.polygonOffset = true
+    snowMat.polygonOffsetFactor = -1
+    snowMat.polygonOffsetUnits = -2
+    this.snowCap = new THREE.Mesh(snowGeo, snowMat)
     this.snowCap.receiveShadow = true
+    this.snowCap.castShadow = true
     this.scene.add(this.snowCap)
 
+    const crownGeo = new THREE.PlaneGeometry(4.4, 1.35, 28, 6)
+    const crownPos = crownGeo.attributes.position as THREE.BufferAttribute
+    for (let i = 0; i < crownPos.count; i++) {
+      const x = crownPos.getX(i)
+      const y = crownPos.getY(i)
+      const jag = fbm(x * 1.6, y * 2.2, 21, 3)
+      crownPos.setZ(i, (jag - 0.5) * 0.18 * (0.4 + y))
+      if (y > 0.4) crownPos.setY(i, y + (jag - 0.5) * 0.25)
+    }
+    crownGeo.computeVertexNormals()
     this.fracture = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.5, 0.08),
-      new THREE.MeshStandardMaterial({
-        color: 0x2a3540,
-        emissive: 0x334455,
-        emissiveIntensity: 0.4,
-        transparent: true,
-        opacity: 0.85,
+      crownGeo,
+      pbrMaterial(lib.rock, {
+        repeat: [2, 1],
+        color: 0x6a5a52,
+        normalScale: 1,
+        roughness: 0.9,
         side: THREE.DoubleSide,
       }),
     )
-    this.fracture.rotation.x = -Math.PI / 2
-    this.fracture.rotation.z = -0.38
-    this.fracture.position.set(-5.5, 4.1, 0)
+    this.fracture.position.set(-5.6, slopeHeight(-5.6, 0) + 0.4, 0)
+    this.fracture.rotation.y = 0.15
+    this.fracture.rotation.z = -0.15
     this.scene.add(this.fracture)
 
-    this.flowCore = new THREE.Mesh(
-      new THREE.BoxGeometry(2.2, 0.55, 3.5),
-      new THREE.MeshStandardMaterial({
-        color: 0xe8f4ff,
-        roughness: 0.55,
-        emissive: 0x88bbee,
-        emissiveIntensity: 0.06,
-      }),
-    )
-    this.flowCore.castShadow = true
-    this.flowCore.visible = false
-    this.scene.add(this.flowCore)
+    const slabMat = pbrMaterial(lib.snow, { repeat: [2, 2], normalScale: 0.4, roughness: 0.62, color: 0xf4f7fb })
+    for (let i = 0; i < 3; i++) {
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.22, 1.1 + i * 0.2), slabMat)
+      slab.castShadow = true
+      slab.receiveShadow = true
+      slab.visible = false
+      this.scene.add(slab)
+      this.slabs.push(slab)
+    }
 
-    this.flowTail = new THREE.Mesh(
-      new THREE.BoxGeometry(3.5, 0.35, 5),
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.55,
-        roughness: 0.35,
-      }),
-    )
-    this.flowTail.visible = false
-    this.scene.add(this.flowTail)
+    this.flowRibbon = this.buildFlowRibbon()
+    this.scene.add(this.flowRibbon)
 
     this.runoutFan = new THREE.Mesh(
-      new THREE.CircleGeometry(1, 32),
-      new THREE.MeshStandardMaterial({
-        color: 0xd8e8f5,
+      new THREE.CircleGeometry(1, 40),
+      pbrMaterial(lib.snow, {
+        repeat: [2, 2],
+        color: 0xe7eef5,
         roughness: 0.9,
+        normalScale: 0.3,
         transparent: true,
-        opacity: 0.65,
+        opacity: 0.72,
         side: THREE.DoubleSide,
+        depthWrite: false,
       }),
     )
     this.runoutFan.rotation.x = -Math.PI / 2
@@ -182,42 +188,67 @@ export class AvalancheScene {
     this.runoutFan.visible = false
     this.scene.add(this.runoutFan)
 
+    const trunkMat = pbrMaterial(lib.bark, { repeat: [1, 2], normalScale: 0.9, roughness: 0.95 })
+    const leafMat = pbrMaterial(lib.soil, {
+      repeat: [1, 1],
+      color: 0x2f6a3a,
+      normalScale: 0.4,
+      roughness: 0.86,
+    })
+    const snowLeaf = pbrMaterial(lib.snow, { repeat: [1, 1], normalScale: 0.2, roughness: 0.7 })
+    const rand = mulberry32(19)
     for (let i = 0; i < 28; i++) {
-      const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.06, 0.09, 0.45, 6),
-        new THREE.MeshStandardMaterial({ color: 0x4a3528, roughness: 1 }),
-      )
-      const crown = new THREE.Mesh(
-        new THREE.ConeGeometry(0.35, 0.9, 7),
-        new THREE.MeshStandardMaterial({ color: 0x1e4d2b, roughness: 0.95 }),
-      )
-      crown.position.y = 0.65
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 0.5, 7), trunkMat)
+      trunk.position.y = 0.25
+      trunk.castShadow = true
+      const crown = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.85, 8), leafMat)
+      crown.position.y = 0.72
+      crown.castShadow = true
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.28, 7), snowLeaf)
+      cap.position.y = 1.05
       const tree = new THREE.Group()
-      tree.add(trunk, crown)
-      const tx = -2 + Math.random() * 14
-      const tz = -6 + Math.random() * 12
+      tree.add(trunk, crown, cap)
+      const tx = -2 + rand() * 14
+      const tz = -6 + rand() * 12
       tree.position.set(tx, slopeHeight(tx, tz), tz)
-      tree.rotation.y = Math.random() * Math.PI
+      tree.rotation.y = rand() * Math.PI
+      tree.userData.uniform = 0.75 + rand() * 0.7
+      tree.scale.setScalar(tree.userData.uniform as number)
       this.trees.add(tree)
     }
-    this.trees.castShadow = true
     this.scene.add(this.trees)
 
+    const wallMat = pbrMaterial(lib.stucco, { repeat: [2, 2], normalScale: 0.65, roughness: 0.9 })
+    const roofMat = pbrMaterial(lib.roof, { repeat: [2, 2], normalScale: 1, roughness: 0.86 })
+    const woodMat = pbrMaterial(lib.bark, { repeat: [1, 1], color: 0xd2b48c, roughness: 0.8 })
     for (let i = 0; i < 6; i++) {
       const g = new THREE.Group()
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(1.1, 0.75, 0.95),
-        new THREE.MeshStandardMaterial({ color: 0xd4c4a8, roughness: 0.88 }),
-      )
-      body.position.y = 0.38
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.78, 0.98), wallMat.clone())
+      body.position.y = 0.39
       body.castShadow = true
-      const roof = new THREE.Mesh(
-        new THREE.ConeGeometry(0.85, 0.45, 4),
-        new THREE.MeshStandardMaterial({ color: 0x6b3e2e, roughness: 0.92 }),
+      body.receiveShadow = true
+      const roofL = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.08, 1.12), roofMat.clone())
+      roofL.position.set(-0.28, 0.9, 0)
+      roofL.rotation.z = 0.42
+      roofL.castShadow = true
+      const roofR = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.08, 1.12), roofL.material)
+      roofR.position.set(0.28, 0.9, 0)
+      roofR.rotation.z = -0.42
+      roofR.castShadow = true
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.06, 0.08), woodMat)
+      beam.position.set(0, 0.72, 0.5)
+      const win = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.22, 0.18),
+        new THREE.MeshPhysicalMaterial({
+          color: 0xc5dcea,
+          roughness: 0.05,
+          metalness: 0.02,
+          transparent: true,
+          opacity: 0.6,
+        }),
       )
-      roof.position.y = 0.92
-      roof.rotation.y = Math.PI / 4
-      g.add(body, roof)
+      win.position.set(0, 0.42, 0.5)
+      g.add(body, roofL, roofR, beam, win)
       const cx = 8 + i * 1.35
       const cz = -2 + (i % 2) * 2.2
       g.position.set(cx, slopeHeight(cx, cz), cz)
@@ -225,38 +256,80 @@ export class AvalancheScene {
       this.chalets.push(g)
     }
 
+    const debrisMat = pbrMaterial(lib.rock, { repeat: [1, 1], color: 0x9aa4ae, roughness: 0.88 })
+    const randD = mulberry32(44)
     for (let i = 0; i < 12; i++) {
-      const rock = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(0.12 + Math.random() * 0.08, 0),
-        new THREE.MeshStandardMaterial({ color: 0x8a9aaa, roughness: 0.85 }),
-      )
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.12 + randD() * 0.1, 0), debrisMat)
+      rock.castShadow = true
       rock.visible = false
       this.scene.add(rock)
       this.debris.push(rock)
     }
   }
 
+  private buildFlowRibbon(): THREE.Mesh {
+    const lib = getPbrLibrary()
+    const seg = 48
+    const span = 8
+    const positions: number[] = []
+    const uvs: number[] = []
+    const indices: number[] = []
+    for (let i = 0; i <= seg; i++) {
+      const t = i / seg
+      const x = -6 + t * 18
+      for (let j = 0; j <= span; j++) {
+        const z = (j / span - 0.5) * (1.6 + t * 2.8)
+        const y = slopeHeight(x, z) + 0.28
+        positions.push(x, y, z)
+        uvs.push(t * 4, j / span)
+      }
+    }
+    const row = span + 1
+    for (let i = 0; i < seg; i++) {
+      for (let j = 0; j < span; j++) {
+        const a = i * row + j
+        indices.push(a, a + 1, a + row, a + 1, a + row + 1, a + row)
+      }
+    }
+    const geo = new THREE.BufferGeometry()
+    this.flowPositions = new Float32Array(positions)
+    geo.setAttribute('position', new THREE.BufferAttribute(this.flowPositions.slice(), 3))
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+    geo.setIndex(indices)
+    geo.computeVertexNormals()
+    const mesh = new THREE.Mesh(
+      geo,
+      pbrMaterial(lib.snow, {
+        repeat: [3, 1],
+        color: 0xd5e4f0,
+        roughness: 0.42,
+        metalness: 0.08,
+        normalScale: 0.55,
+        transparent: true,
+        opacity: 0.94,
+      }),
+    )
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.visible = false
+    return mesh
+  }
+
   private mountPowder() {
-    const count = 2200
+    if (this.powder) return
+    const count = 1800
     const geo = new THREE.BufferGeometry()
     const positions = new Float32Array(count * 3)
-    this.powderVel = new Float32Array(count * 3)
-    for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 2
-      positions[i * 3 + 1] = 2 + Math.random() * 2
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 2
-      this.powderVel[i * 3] = (Math.random() - 0.5) * 0.08
-      this.powderVel[i * 3 + 1] = Math.random() * 0.04
-      this.powderVel[i * 3 + 2] = (Math.random() - 0.5) * 0.08
-    }
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    const lib = getPbrLibrary()
     this.powder = new THREE.Points(
       geo,
       new THREE.PointsMaterial({
-        color: 0xf0f8ff,
-        size: 0.12,
+        color: 0xf7fbff,
+        size: 0.18,
+        map: lib.softGlow,
         transparent: true,
-        opacity: 0.45,
+        opacity: 0.4,
         depthWrite: false,
       }),
     )
@@ -281,60 +354,53 @@ export class AvalancheScene {
   private applyState(s: AvalancheState) {
     const runNorm = THREE.MathUtils.clamp(s.runoutDistance_m / 1200, 0, 1)
     const active = s.runoutDistance_m > 15
+    const depth = THREE.MathUtils.clamp(s.slabFractureDepth_m / 1.4, 0.02, 1.6)
 
     this.fracture.visible = s.slabFractureDepth_m > 0.05
-    const fractureMat = this.fracture.material as THREE.MeshStandardMaterial
-    fractureMat.opacity = THREE.MathUtils.clamp(s.slabFractureDepth_m * 2, 0.2, 1)
-    fractureMat.emissiveIntensity =
-      0.2 + s.slabFractureDepth_m * 0.8
+    this.fracture.scale.y = depth
+    this.fracture.position.y = slopeHeight(-5.6, 0) + 0.15 + depth * 0.35
 
-    this.snowCap.scale.set(1 - runNorm * 0.35, 1, 1 - runNorm * 0.2)
-    this.snowCap.position.x = -runNorm * 1.2
+    this.snowCap.position.x = -runNorm * 0.35
 
-    this.flowCore.visible = active
-    this.flowTail.visible = active
-    const fx = -4 + runNorm * 14
-    const fy = slopeHeight(fx, 0) + 0.35
-    this.flowCore.position.set(fx, fy, 0)
-    this.flowCore.scale.set(1 + runNorm * 3.5, 0.7 + s.flowSpeed_m_s * 0.04, 1 + runNorm * 2.2)
-    this.flowTail.position.set(fx - 1.2, fy - 0.15, 0)
-    this.flowTail.scale.set(1 + runNorm * 4, 1, 1 + runNorm * 3)
-    this.flowTail.rotation.z = -0.38
+    this.slabs.forEach((slab, i) => {
+      slab.visible = s.slabFractureDepth_m > 0.08
+      const slide = runNorm * (3.2 + i * 1.4)
+      const x = -5.2 + slide
+      const z = -0.8 + i * 0.7
+      slab.position.set(x, slopeHeight(x, z) + 0.2, z)
+      slab.rotation.z = -0.25 - runNorm * 0.2
+      slab.scale.y = 0.6 + depth * 0.8
+    })
+
+    this.updateFlowRibbon(runNorm, active, s.flowSpeed_m_s)
 
     this.runoutFan.visible = runNorm > 0.25
-    this.runoutFan.scale.setScalar(0.5 + runNorm * 7)
-    this.runoutFan.position.set(6 + runNorm * 6, slopeHeight(6 + runNorm * 6, 0) + 0.05, 0)
+    this.runoutFan.scale.setScalar(0.6 + runNorm * 6.5)
+    const fx = 6 + runNorm * 6
+    this.runoutFan.position.set(fx, slopeHeight(fx, 0) + 0.06, 0)
 
-    this.lastFlow = runNorm
-
-    if (this.powder) {
-      this.powder.visible = active && s.flowSpeed_m_s > 8
-      this.powder.position.set(fx, fy + 0.6, 0)
-      const mat = this.powder.material as THREE.PointsMaterial
-      mat.opacity = 0.15 + runNorm * 0.45
-    }
+    this.syncPowder(s, runNorm, active)
 
     s.chalets.forEach((c, i) => {
       const g = this.chalets[i]
       if (!g) return
       const body = g.children[0] as THREE.Mesh
-      const roof = g.children[1] as THREE.Mesh
       const wallMat = body.material as THREE.MeshStandardMaterial
+      g.rotation.z = 0
+      g.scale.y = 1
       if (c.severityIndex >= 3) {
-        wallMat.color.setHex(0x6b7280)
-        g.scale.y = 0.35
-        g.rotation.z = 0.35
-        roof.rotation.z = 0.4
+        wallMat.color.setHex(0x8a847c)
+        g.scale.y = 0.38
+        g.rotation.z = 0.38
       } else if (c.severityIndex >= 2) {
-        wallMat.color.setHex(0xa89078)
+        wallMat.color.setHex(0xb0a090)
         g.rotation.z = 0.22
+        g.scale.y = 0.8
       } else if (c.severityIndex >= 1) {
-        wallMat.color.setHex(0xc4b498)
-        g.scale.y = 0.85
+        wallMat.color.setHex(0xd2c6b4)
+        g.scale.y = 0.92
       } else {
-        wallMat.color.setHex(0xd4c4a8)
-        g.scale.y = 1
-        g.rotation.z = 0
+        wallMat.color.setHex(0xffffff)
       }
     })
 
@@ -342,32 +408,75 @@ export class AvalancheScene {
       d.visible = runNorm > 0.35
       const angle = (i / this.debris.length) * Math.PI * 0.8 - 0.4
       const rad = 4 + runNorm * 8
-      d.position.set(6 + Math.cos(angle) * rad, slopeHeight(6 + Math.cos(angle) * rad, Math.sin(angle) * 2) + 0.1, Math.sin(angle) * rad)
+      const x = 6 + Math.cos(angle) * rad
+      const z = Math.sin(angle) * rad
+      d.position.set(x, slopeHeight(x, z) + 0.12, z)
+      d.rotation.y = s.timeSec * 0.2 + i
     })
 
     this.trees.children.forEach((tree, i) => {
       const buried = runNorm > 0.55 && i % 3 === 0
       tree.visible = !buried || runNorm < 0.85
-      tree.scale.y = buried ? 0.2 : 1
+      const uniform = (tree.userData.uniform as number) || 1
+      tree.scale.set(uniform, buried ? uniform * 0.22 : uniform, uniform)
     })
   }
 
-  private updatePowder(dt: number) {
-    if (!this.powder?.visible) return
-    const pos = this.powder.geometry.getAttribute('position') as THREE.BufferAttribute
-    const arr = pos.array as Float32Array
-    const speed = 0.6 + this.lastFlow * 2
-    for (let i = 0; i < arr.length / 3; i++) {
-      arr[i * 3] += this.powderVel[i * 3]! * speed * dt
-      arr[i * 3 + 1] += this.powderVel[i * 3 + 1]! * speed * dt
-      arr[i * 3 + 2] += this.powderVel[i * 3 + 2]! * speed * dt
-      if (arr[i * 3 + 1]! > 4) {
-        arr[i * 3] = (Math.random() - 0.5) * 2
-        arr[i * 3 + 1] = 0.5 + Math.random()
-        arr[i * 3 + 2] = (Math.random() - 0.5) * 2
+  private updateFlowRibbon(runNorm: number, active: boolean, speed: number) {
+    this.flowRibbon.visible = active
+    if (!active) return
+    const attr = this.flowRibbon.geometry.getAttribute('position') as THREE.BufferAttribute
+    const base = this.flowPositions
+    const seg = 48
+    const span = 8
+    const row = span + 1
+    for (let i = 0; i <= seg; i++) {
+      const t = i / seg
+      const revealed = t <= runNorm + 0.02
+      for (let j = 0; j <= span; j++) {
+        const idx = i * row + j
+        const x = base[idx * 3]!
+        const z = base[idx * 3 + 2]!
+        if (!revealed) {
+          attr.setXYZ(idx, x, -4, z)
+          continue
+        }
+        const snout = THREE.MathUtils.clamp(1 - Math.abs(t - runNorm) * 6, 0, 1)
+        const body = 0.18 + snout * 0.55 + Math.min(speed, 40) * 0.004
+        const edge = 1 - Math.abs(j / span - 0.5) * 1.4
+        attr.setXYZ(idx, x, slopeHeight(x, z) + body * Math.max(0.25, edge), z)
       }
     }
+    attr.needsUpdate = true
+    this.flowRibbon.geometry.computeVertexNormals()
+    const mat = this.flowRibbon.material as THREE.MeshStandardMaterial
+    mat.opacity = 0.78 + Math.min(runNorm, 1) * 0.2
+  }
+
+  private syncPowder(s: AvalancheState, runNorm: number, active: boolean) {
+    if (!this.powder) return
+    const blowing = active && s.flowSpeed_m_s > 8
+    this.powder.visible = blowing
+    if (!blowing) return
+    const pos = this.powder.geometry.getAttribute('position') as THREE.BufferAttribute
+    const arr = pos.array as Float32Array
+    const count = arr.length / 3
+    const frontX = -6 + runNorm * 18
+    const frontY = slopeHeight(frontX, 0)
+    for (let i = 0; i < count; i++) {
+      const u = hash2(i, 2, 5)
+      const v = hash2(i, 4, 8)
+      const life = (s.timeSec * 0.4 + u) % 1
+      const ang = v * Math.PI * 2
+      const rad = life * (1.1 + runNorm * 3.6)
+      arr[i * 3] = frontX - life * 2.2 + Math.cos(ang) * rad * 0.45
+      arr[i * 3 + 1] = frontY + 0.5 + life * (1.4 + runNorm * 3.2)
+      arr[i * 3 + 2] = Math.sin(ang) * rad
+    }
     pos.needsUpdate = true
+    const mat = this.powder.material as THREE.PointsMaterial
+    mat.opacity = 0.18 + runNorm * 0.5
+    mat.size = 0.12 + runNorm * 0.16
   }
 
   private renderOnce() {
@@ -378,8 +487,6 @@ export class AvalancheScene {
   start() {
     const loop = () => {
       this.raf = requestAnimationFrame(loop)
-      const dt = Math.min(this.clock.getDelta(), 0.05)
-      this.updatePowder(dt)
       this.controls.update()
       this.renderer.render(this.scene, this.camera)
     }

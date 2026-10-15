@@ -6,8 +6,9 @@ import { buildVolcano } from './volcanoBuilder'
 import { AshPlumeSystem, SparkSystem } from './particles'
 import { ConduitTracerSystem } from './conduitTracers'
 import { applyHouseSeverity } from './villageBuilder'
-import { ensureRockTexturesAsync, getLavaTexture } from './textures'
+import { ensurePbrLibraryAsync, getPbrLibrary } from './pbrLibrary'
 import { logInitPhase, scheduleIdle, yieldFrame } from './initTiming'
+import { addAtmosphere, addOutdoorLighting, createStandardRenderer } from './sceneBootstrap'
 
 export type InitProgressStep = 'webgl' | 'textures' | 'model' | 'interactive' | 'effects'
 
@@ -27,12 +28,12 @@ export class VolcanoScene {
   private scene: THREE.Scene
   private camera: THREE.PerspectiveCamera
   private controls: OrbitControls
-  private clock = new THREE.Clock()
   private ash: AshPlumeSystem | null = null
   private sparks: SparkSystem | null = null
   private tracers: ConduitTracerSystem | null = null
   private build: ReturnType<typeof buildVolcano> | null = null
-  private plumeMesh: THREE.Mesh | null = null
+  private plumeGroup: THREE.Group | null = null
+  private craterSprite: THREE.Sprite | null = null
   private clipPlane: THREE.Plane
   private cutawayEnabled = true
   private labelsVisible = true
@@ -48,18 +49,13 @@ export class VolcanoScene {
   private constructor(container: HTMLElement) {
     this.container = container
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(0x87a4bc)
-    this.scene.fog = new THREE.FogExp2(0x9eb5c9, 0.042)
+    addAtmosphere(this.scene, 'volcano')
 
-    this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 120)
-    this.camera.position.set(9, 5.5, 9)
+    this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 180)
+    this.camera.position.set(11.5, 6.4, 12.2)
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    this.renderer.shadowMap.enabled = true
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    this.renderer = createStandardRenderer(container)
     this.renderer.localClippingEnabled = true
-    container.appendChild(this.renderer.domElement)
 
     this.labelRenderer = new CSS2DRenderer()
     this.labelRenderer.domElement.style.position = 'absolute'
@@ -72,28 +68,10 @@ export class VolcanoScene {
     this.controls.dampingFactor = 0.06
     this.controls.maxPolarAngle = Math.PI / 2 - 0.05
     this.controls.minDistance = 4
-    this.controls.maxDistance = 22
-    this.controls.target.set(0, 2.2, 0)
+    this.controls.maxDistance = 28
+    this.controls.target.set(0.4, 2.5, 0.2)
 
-    const hemi = new THREE.HemisphereLight(0xddeeff, 0x3d4a2a, 0.55)
-    this.scene.add(hemi)
-
-    const sun = new THREE.DirectionalLight(0xfff5e6, 1.35)
-    sun.position.set(6, 12, 4)
-    sun.castShadow = true
-    sun.shadow.mapSize.set(1024, 1024)
-    sun.shadow.camera.near = 1
-    sun.shadow.camera.far = 40
-    sun.shadow.camera.left = -12
-    sun.shadow.camera.right = 12
-    sun.shadow.camera.top = 12
-    sun.shadow.camera.bottom = -12
-    sun.shadow.bias = -0.0004
-    this.scene.add(sun)
-
-    const fill = new THREE.DirectionalLight(0xaaccff, 0.35)
-    fill.position.set(-5, 4, -6)
-    this.scene.add(fill)
+    addOutdoorLighting(this.scene, 16, 'volcano')
 
     this.clipPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0)
 
@@ -113,8 +91,7 @@ export class VolcanoScene {
     logInitPhase('WebGL + lights', t0)
 
     onProgress?.('textures')
-    await ensureRockTexturesAsync()
-    getLavaTexture()
+    await ensurePbrLibraryAsync()
     logInitPhase('textures', t0)
 
     onProgress?.('model')
@@ -149,20 +126,39 @@ export class VolcanoScene {
     this.scene.add(this.build.root)
     this.applyClipPlanes()
 
-    const plumeGeo = new THREE.CylinderGeometry(0.15, 1.2, 6, 12, 1, true)
-    const plumeMat = new THREE.MeshStandardMaterial({
-      color: 0xb0b8c4,
+    const lib = getPbrLibrary()
+    this.plumeGroup = new THREE.Group()
+    const plumeColors = [0x3a342f, 0x5c564f, 0x7d7870, 0xa39e96, 0xcac6bf]
+    for (let i = 0; i < 5; i++) {
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.5 + i * 0.28, 18, 14),
+        new THREE.MeshStandardMaterial({
+          color: plumeColors[i],
+          transparent: true,
+          opacity: 0.14,
+          roughness: 1,
+          metalness: 0,
+          depthWrite: false,
+        }),
+      )
+      mesh.scale.set(1, 1.7, 1)
+      mesh.position.y = 5.2 + i * 0.8
+      this.plumeGroup.add(mesh)
+    }
+    this.scene.add(this.plumeGroup)
+
+    const spriteMat = new THREE.SpriteMaterial({
+      map: lib.softGlow,
+      color: 0xff7722,
       transparent: true,
-      opacity: 0.35,
-      roughness: 0.95,
-      metalness: 0,
-      side: THREE.DoubleSide,
-      emissive: 0x444455,
-      emissiveIntensity: 0.15,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      opacity: 0.0,
     })
-    this.plumeMesh = new THREE.Mesh(plumeGeo, plumeMat)
-    this.plumeMesh.position.set(0, 7.2, 0)
-    this.scene.add(this.plumeMesh)
+    this.craterSprite = new THREE.Sprite(spriteMat)
+    this.craterSprite.position.set(0, 4.7, 0)
+    this.craterSprite.scale.set(2.4, 2.4, 1)
+    this.scene.add(this.craterSprite)
   }
 
   private mountParticleEffects() {
@@ -173,6 +169,11 @@ export class VolcanoScene {
     this.scene.add(this.ash.points)
     this.scene.add(this.sparks.points)
     this.build?.conduit.add(this.tracers.points)
+    if (this.lastState) {
+      this.ash.sync(this.lastState.timeSec, this.lastState.activity)
+      this.sparks.sync(this.lastState.timeSec, this.lastState.activity)
+      this.tracers.renderAt(this.lastState.timeSec, this.lastState.Q_m3s, this.lastState.activity)
+    }
   }
 
   private applyClipPlanes() {
@@ -204,7 +205,7 @@ export class VolcanoScene {
       { text: texts.conduit, pos: new THREE.Vector3(-0.6, 2.8, 0) },
       { text: texts.crater, pos: new THREE.Vector3(0.3, 4.7, 0.3) },
       { text: texts.lavaFlow, pos: new THREE.Vector3(2.8, 0.4, 2) },
-      { text: texts.plume, pos: new THREE.Vector3(0.5, 8, 0.5) },
+      { text: texts.plume, pos: new THREE.Vector3(0.8, 8.2, 0.4) },
     ]
     for (const d of defs) {
       const el = document.createElement('span')
@@ -248,7 +249,7 @@ export class VolcanoScene {
   }
 
   private applyEruptionState(state: EruptionState) {
-    if (!this.build || !this.plumeMesh) return
+    if (!this.build || !this.plumeGroup) return
     const a = state.activity
     const chamberMat = this.build.chamber.material as THREE.MeshStandardMaterial
     const tNorm = (state.T_magma_C - 950) / 300
@@ -269,25 +270,45 @@ export class VolcanoScene {
     const conduitScale = 1 + (state.conduitRadiusM / 1.8 - 1) * 0.15
     this.build.conduit.scale.set(conduitScale, 1, conduitScale)
 
-    this.build.craterGlow.intensity = a * 3.5 * state.intensity
+    this.build.craterGlow.intensity = a * 4.2 * state.intensity
     this.build.lavaFlow.visible = a > 0.32 || state.lavaFrontM > 30
     const lavaMat = this.build.lavaFlow.material as THREE.MeshStandardMaterial
     const thermal = THREE.MathUtils.clamp((state.T_magma_C - 1000) / 250, 0, 1)
     lavaMat.emissive.setHSL(0.08 - thermal * 0.04, 1, 0.45 + thermal * 0.2)
-    lavaMat.emissiveIntensity = (0.4 + a * 1.8) * (state.Q_m3s > 0 ? 1 : 0.35)
+    lavaMat.emissiveIntensity = (0.45 + a * 1.9) * (state.Q_m3s > 0 ? 1 : 0.35)
+    if (lavaMat.map) lavaMat.map.offset.y = state.timeSec * 0.012
 
     const frontScene = 1.2 + (state.lavaFrontM / 1500) * 6.5
     this.build.lavaFlow.scale.set(0.35 + frontScene * 0.12, 1, 0.4 + frontScene * 0.14)
 
     const crustMat = this.build.lavaCrust.material as THREE.MeshStandardMaterial
     const crustFrac = THREE.MathUtils.clamp(1 - thermal + state.timeSec * 0.015, 0, 0.85)
-    crustMat.opacity = state.ventOpen ? crustFrac * 0.75 * a : 0
+    crustMat.opacity = state.ventOpen ? crustFrac * 0.82 * Math.max(a, 0.35) : 0
+    crustMat.emissiveIntensity = (1 - crustFrac) * 0.8 + 0.15
     this.build.lavaCrust.scale.copy(this.build.lavaFlow.scale)
+    this.build.craterCrust.scale.setScalar(0.85 + crustFrac * 0.2)
 
-    const plumeMat = this.plumeMesh.material as THREE.MeshStandardMaterial
-    plumeMat.opacity = 0.08 + a * 0.48
-    this.plumeMesh.scale.set(0.6 + a * 1.3, 0.4 + a * 1.7, 0.6 + a * 1.3)
-    this.plumeMesh.visible = a > 0.12
+    const coneMat = this.build.cone.material as THREE.MeshStandardMaterial
+    const ash = a * 0.28
+    coneMat.color.setRGB(1 - ash, 0.97 - ash * 1.05, 0.94 - ash * 1.15)
+
+    this.plumeGroup.visible = a > 0.08
+    this.plumeGroup.children.forEach((child, i) => {
+      const mesh = child as THREE.Mesh
+      const mat = mesh.material as THREE.MeshStandardMaterial
+      const grow = 0.55 + a * (1.35 + i * 0.28)
+      mesh.scale.set(grow * (1 + i * 0.22), (0.7 + a * 1.85) * (1 + i * 0.15), grow * (0.9 + i * 0.16))
+      mat.opacity = (0.1 + a * 0.22) * (1 - i * 0.1)
+      mesh.position.y = 5.15 + i * (0.55 + a * 1.05)
+      mesh.position.x = a * 0.32 * i + Math.sin(state.timeSec * 0.18 + i) * 0.06
+    })
+
+    if (this.craterSprite) {
+      const spriteMat = this.craterSprite.material as THREE.SpriteMaterial
+      spriteMat.opacity = a * 0.9
+      const s = 1.5 + a * 3.1
+      this.craterSprite.scale.set(s, s, 1)
+    }
 
     const buildUp = state.timeSec < 10 ? Math.sin(state.timeSec * 0.8) * 0.02 : 0
     this.build.chamber.scale.y = 0.75 + buildUp + a * 0.08 + (state.P_chamber_MPa / 30) * 0.04
@@ -295,13 +316,12 @@ export class VolcanoScene {
     for (let i = 0; i < this.build.geologyLayers.length; i++) {
       const layer = this.build.geologyLayers[i]!
       const mat = layer.material as THREE.MeshStandardMaterial
-      mat.emissive = new THREE.Color(0x331100)
-      mat.emissiveIntensity = state.meltFraction * 0.08 * (i / 5)
+      mat.emissive.setHex(0x331100)
+      mat.emissiveIntensity = state.meltFraction * 0.12 * (i / 5)
     }
     this.build.dikes.forEach((dike, i) => {
       const mat = dike.material as THREE.MeshStandardMaterial
-      mat.emissiveIntensity =
-        0.12 + state.meltFraction * 0.25 * (state.timeSec > 5 + i * 2 ? 1 : 0.3)
+      mat.emissiveIntensity = 0.12 + state.meltFraction * 0.35 * (state.timeSec > 5 + i * 2 ? 1 : 0.3)
     })
 
     state.structures.forEach((st, i) => {
@@ -310,6 +330,8 @@ export class VolcanoScene {
       applyHouseSeverity(house, st.severity, (st.severityIndex % 5) / 5)
     })
 
+    this.ash?.sync(state.timeSec, a)
+    this.sparks?.sync(state.timeSec, a)
     this.tracers?.renderAt(state.timeSec, state.Q_m3s, a)
   }
 
@@ -327,12 +349,7 @@ export class VolcanoScene {
     this.loopRunning = true
     const loop = () => {
       this.animationId = requestAnimationFrame(loop)
-      const dt = Math.min(this.clock.getDelta(), 0.05)
       this.controls.update()
-      const state = this.lastState ?? computeEruptionState(this.timeSec, this.intensity)
-      const a = state.activity
-      this.ash?.update(dt, a)
-      this.sparks?.update(dt, a)
       this.renderer.render(this.scene, this.camera)
       this.labelRenderer.render(this.scene, this.camera)
     }

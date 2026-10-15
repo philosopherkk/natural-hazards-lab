@@ -1,4 +1,4 @@
-# Natural Hazards Lab (v4.2.0)
+# Natural Hazards Lab (v5.0.0)
 
 Interactive **Vite + TypeScript + Three.js** timelines for four geohazards, with **engineering** and **primary-school (simple)** explanations in **English** and **Traditional Chinese (zh-TW)**.
 
@@ -46,4 +46,6 @@ npm run preview
 - `src/i18n/catalog/` — EN + zh-TW copy for hub and all modules
 - `src/i18n/hazards/` — per-hazard timeline bands (8–12 steps) and stage narratives
 
-**Version:** 4.2.0 · **Updated:** 2026-10-15
+**Version:** 5.0.0 · **Updated:** 2026-10-15
+
+Scenes use physically based materials (albedo, roughness, metalness, normal maps), displaced terrain, hemisphere and directional sun, soft shadows, and ACES tone mapping. State at time *t* is deterministic for scrub and reverse.

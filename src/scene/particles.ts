@@ -1,112 +1,103 @@
 import * as THREE from 'three'
+import { hash2 } from './noise'
+import { getPbrLibrary } from './pbrLibrary'
+
+const TAU = Math.PI * 2
 
 export class AshPlumeSystem {
   readonly points: THREE.Points
-  private velocities: Float32Array
   private count: number
-  private spread = 2.2
 
-  constructor(count = 4000) {
+  constructor(count = 2600) {
     this.count = count
     const geo = new THREE.BufferGeometry()
     const positions = new Float32Array(count * 3)
-    this.velocities = new Float32Array(count * 3)
-    for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 0.4
-      positions[i * 3 + 1] = 4.5 + Math.random() * 0.5
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 0.4
-      this.resetVelocity(i)
-    }
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    const lib = getPbrLibrary()
     const mat = new THREE.PointsMaterial({
-      color: 0x9ca3af,
-      size: 0.08,
+      color: 0xc5bfb6,
+      size: 0.16,
+      map: lib.softGlow,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.45,
       depthWrite: false,
       blending: THREE.NormalBlending,
+      sizeAttenuation: true,
     })
     this.points = new THREE.Points(geo, mat)
   }
 
-  private resetVelocity(i: number) {
-    this.velocities[i * 3] = (Math.random() - 0.5) * 0.03
-    this.velocities[i * 3 + 1] = 0.12 + Math.random() * 0.25
-    this.velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.03
-  }
-
-  update(_dt: number, activity: number, wind = 0.4) {
+  /** Rebuilds the plume from time so scrub and reverse match. */
+  sync(timeSec: number, activity: number) {
     const pos = this.points.geometry.getAttribute('position') as THREE.BufferAttribute
     const arr = pos.array as Float32Array
+    const rise = 1.1 + activity * 7.2
     for (let i = 0; i < this.count; i++) {
-      if (activity < 0.05) continue
-      arr[i * 3] += (this.velocities[i * 3] + wind * 0.02) * activity
-      arr[i * 3 + 1] += this.velocities[i * 3 + 1] * activity
-      arr[i * 3 + 2] += this.velocities[i * 3 + 2] * activity
-      const dx = arr[i * 3]
-      const dz = arr[i * 3 + 2]
-      if (arr[i * 3 + 1] > 4.5 + activity * 8 || Math.hypot(dx, dz) > this.spread + activity * 3) {
-        arr[i * 3] = (Math.random() - 0.5) * 0.3
-        arr[i * 3 + 1] = 4.5 + Math.random() * 0.2
-        arr[i * 3 + 2] = (Math.random() - 0.5) * 0.3
-        this.resetVelocity(i)
-      }
+      const u = hash2(i, 1, 3)
+      const v = hash2(i, 7, 9)
+      const life = (timeSec * (0.18 + activity * 0.22) + u) % 1
+      const ang = v * TAU + timeSec * 0.12
+      const rad = life * life * (0.25 + activity * 2.6)
+      arr[i * 3] = Math.cos(ang) * rad + life * activity * 1.15
+      arr[i * 3 + 1] = 4.55 + life * rise
+      arr[i * 3 + 2] = Math.sin(ang) * rad * 0.85
     }
     pos.needsUpdate = true
     const mat = this.points.material as THREE.PointsMaterial
-    mat.opacity = 0.15 + activity * 0.5
-    mat.size = 0.05 + activity * 0.12
+    mat.opacity = activity < 0.05 ? 0 : 0.12 + activity * 0.5
+    mat.size = 0.08 + activity * 0.16
   }
 }
 
 export class SparkSystem {
   readonly points: THREE.Points
-  private velocities: Float32Array
   private count: number
 
-  constructor(count = 800) {
+  constructor(count = 520) {
     this.count = count
     const geo = new THREE.BufferGeometry()
     const positions = new Float32Array(count * 3)
-    this.velocities = new Float32Array(count * 3)
-    for (let i = 0; i < count; i++) {
-      this.respawn(i, positions)
-    }
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    const lib = getPbrLibrary()
     const mat = new THREE.PointsMaterial({
-      color: 0xffcc33,
-      size: 0.06,
+      color: 0xffcc66,
+      size: 0.09,
+      map: lib.softGlow,
       transparent: true,
       opacity: 0.9,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
     })
     this.points = new THREE.Points(geo, mat)
   }
 
-  private respawn(i: number, arr: Float32Array) {
-    arr[i * 3] = (Math.random() - 0.5) * 0.25
-    arr[i * 3 + 1] = 4.6
-    arr[i * 3 + 2] = (Math.random() - 0.5) * 0.25
-    const speed = 0.4 + Math.random() * 0.8
-    const angle = Math.random() * Math.PI * 2
-    this.velocities[i * 3] = Math.cos(angle) * speed * 0.15
-    this.velocities[i * 3 + 1] = speed * (0.5 + Math.random())
-    this.velocities[i * 3 + 2] = Math.sin(angle) * speed * 0.15
-  }
-
-  update(dt: number, activity: number) {
+  sync(timeSec: number, activity: number) {
     const pos = this.points.geometry.getAttribute('position') as THREE.BufferAttribute
     const arr = pos.array as Float32Array
     for (let i = 0; i < this.count; i++) {
-      if (activity < 0.1) continue
-      arr[i * 3] += this.velocities[i * 3] * dt * activity
-      arr[i * 3 + 1] += this.velocities[i * 3 + 1] * dt * activity
-      arr[i * 3 + 2] += this.velocities[i * 3 + 2] * dt * activity
-      this.velocities[i * 3 + 1] -= 2.5 * dt
-      if (arr[i * 3 + 1] < 4.2) this.respawn(i, arr)
+      const u = hash2(i, 3, 11)
+      const v = hash2(i, 5, 13)
+      const w = hash2(i, 9, 17)
+      const life = (timeSec * (0.85 + u * 0.7) + v) % 1
+      const ang = w * TAU
+      const speed = 0.7 + u * 1.1
+      const vx = Math.cos(ang) * speed * 0.42
+      const vz = Math.sin(ang) * speed * 0.42
+      const vy = speed * (0.85 + v * 0.8)
+      const t = life
+      const y = 4.58 + vy * t * 1.35 - 3.4 * t * t
+      if (activity < 0.12 || y < 4.35) {
+        arr[i * 3] = 0
+        arr[i * 3 + 1] = 4.5
+        arr[i * 3 + 2] = 0
+      } else {
+        arr[i * 3] = vx * t * (0.4 + activity)
+        arr[i * 3 + 1] = y
+        arr[i * 3 + 2] = vz * t * (0.4 + activity)
+      }
     }
     pos.needsUpdate = true
-    ;(this.points.material as THREE.PointsMaterial).opacity = Math.min(1, activity * 1.2)
+    ;(this.points.material as THREE.PointsMaterial).opacity = Math.min(1, activity * 1.15)
   }
 }

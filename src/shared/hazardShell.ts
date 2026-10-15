@@ -380,18 +380,20 @@ export function mountHazardShell(options: HazardShellOptions): () => void {
   function tick(now: number) {
     if (playing) {
       const dt = (now - lastFrame) / 1000
-      const dir = reverse ? -1 : 1
-      let next = timeSec + dt * dir * playbackSpeed
-      if (next >= TIMELINE_DURATION) {
-        next = TIMELINE_DURATION
-        playing = false
-        syncTransport()
-      } else if (next <= 0) {
-        next = 0
-        playing = false
-        syncTransport()
+      if (dt > 0) {
+        const dir = reverse ? -1 : 1
+        let next = timeSec + dt * dir * playbackSpeed
+        if (next >= TIMELINE_DURATION) {
+          next = TIMELINE_DURATION
+          playing = false
+          syncTransport()
+        } else if (next <= 0) {
+          next = 0
+          playing = false
+          syncTransport()
+        }
+        setTime(next)
       }
-      setTime(next)
     }
     lastFrame = now
     raf = requestAnimationFrame(tick)

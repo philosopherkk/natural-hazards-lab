@@ -1,13 +1,17 @@
 import * as THREE from 'three'
-import { getLavaTexture, getRockTextures } from './textures'
+import { fbm } from './noise'
+import { getPbrLibrary, pbrMaterial } from './pbrLibrary'
 import { buildVillage, type HouseBuild } from './villageBuilder'
 
 export interface VolcanoBuildResult {
   root: THREE.Group
+  cone: THREE.Mesh
   chamber: THREE.Mesh
   conduit: THREE.Mesh
   lavaFlow: THREE.Mesh
   lavaCrust: THREE.Mesh
+  craterPool: THREE.Mesh
+  craterCrust: THREE.Mesh
   craterGlow: THREE.PointLight
   clipMaterials: THREE.Material[]
   geologyLayers: THREE.Mesh[]
@@ -19,93 +23,114 @@ export interface VolcanoBuildResult {
 
 function volcanoProfilePoints(): THREE.Vector2[] {
   const pts: THREE.Vector2[] = []
-  const segments = 32
+  const segments = 40
   for (let i = 0; i <= segments; i++) {
     const t = i / segments
     const y = t * 4.8
-    let r = 4.2 * (1 - t * 0.92)
-    r += Math.sin(t * 18) * 0.08 * (1 - t)
-    r += Math.sin(t * 7 + 1.2) * 0.12 * (1 - t * 0.5)
-    if (t > 0.88) {
-      const crater = (t - 0.88) / 0.12
-      r *= 1 - crater * 0.35
+    let r = 4.15 * (1 - t * 0.9)
+    r += Math.sin(t * 18) * 0.07 * (1 - t)
+    r += Math.sin(t * 7 + 1.2) * 0.1 * (1 - t * 0.5)
+    if (t > 0.86) {
+      const crater = (t - 0.86) / 0.14
+      r = Math.max(0.42, r * (1 - crater * 0.55) + crater * 0.48)
     }
-    if (t < 0.08) r *= 0.85 + t * 2
-    pts.push(new THREE.Vector2(Math.max(0.15, r), y))
+    if (t < 0.06) r *= 0.92 + t * 1.4
+    pts.push(new THREE.Vector2(Math.max(0.28, r), y))
   }
   return pts
 }
 
+function groundHeight(x: number, z: number): number {
+  const d = Math.hypot(x, z)
+  const n = fbm(x * 0.42, z * 0.42, 6, 4)
+  const foothill = Math.exp(-(d * d) / 26) * 0.62
+  const ridge = (n - 0.5) * 0.38 * Math.min(1, d / 2.4)
+  const villageFlat = THREE.MathUtils.smoothstep(x, 2.6, 4.4)
+  return Math.max(0, (foothill + ridge) * (1 - villageFlat * 0.94))
+}
+
 export function buildVolcano(): VolcanoBuildResult {
+  const lib = getPbrLibrary()
   const root = new THREE.Group()
-  const { map, roughnessMap, normalMap } = getRockTextures()
   const clipMaterials: THREE.Material[] = []
 
-  const makeRockMat = (colorTint?: number) => {
-    const mat = new THREE.MeshStandardMaterial({
-      map,
-      roughnessMap,
-      normalMap,
-      normalScale: new THREE.Vector2(0.6, 0.6),
-      roughness: 0.85,
-      metalness: 0.05,
+  const makeRockMat = (colorTint?: number, repeat: [number, number] = [3, 2]) => {
+    const mat = pbrMaterial(lib.rock, {
+      repeat,
       color: colorTint ?? 0xffffff,
+      normalScale: 1.15,
+      roughness: 0.92,
+      side: THREE.DoubleSide,
     })
-    mat.side = THREE.DoubleSide
     clipMaterials.push(mat)
     return mat
   }
 
   const geologyLayers: THREE.Mesh[] = []
-  const layerColors = [0x3d4a3a, 0x4a4035, 0x5c5040, 0x6a5544, 0x524638]
+  const layerTints = [0x8a9a78, 0xc4a882, 0x9a7a62, 0xb89674, 0x6e5848]
   for (let layer = 0; layer < 5; layer++) {
-    const y0 = 0.15 + layer * 0.55
+    const y0 = 0.18 + layer * 0.52
+    const mat = pbrMaterial(lib.rock, {
+      repeat: [2, 1],
+      color: layerTints[layer],
+      normalScale: 0.8,
+      roughness: 0.95,
+      transparent: true,
+      opacity: 0.72,
+      side: THREE.DoubleSide,
+    })
     const disk = new THREE.Mesh(
-      new THREE.CylinderGeometry(5.5 - layer * 0.35, 5.8 - layer * 0.35, 0.08, 48, 1, true),
-      new THREE.MeshStandardMaterial({
-        color: layerColors[layer]!,
-        roughness: 0.95,
-        transparent: true,
-        opacity: 0.55,
-        side: THREE.DoubleSide,
-      }),
+      new THREE.CylinderGeometry(5.4 - layer * 0.32, 5.7 - layer * 0.32, 0.1, 48, 1, true),
+      mat,
     )
     disk.position.y = y0
-    clipMaterials.push(disk.material as THREE.Material)
+    clipMaterials.push(mat)
     root.add(disk)
     geologyLayers.push(disk)
   }
 
   const dikes: THREE.Mesh[] = []
   for (let d = 0; d < 3; d++) {
-    const dike = new THREE.Mesh(
-      new THREE.BoxGeometry(0.12, 1.8 + d * 0.4, 0.35),
-      new THREE.MeshStandardMaterial({
-        color: 0x2a1810,
-        emissive: 0x441100,
-        emissiveIntensity: 0.15,
-        roughness: 0.85,
-      }),
-    )
-    dike.position.set(-1.2 + d * 1.1, 0.5 + d * 0.3, -0.6 + d * 0.4)
+    const mat = pbrMaterial(lib.crust, {
+      repeat: [1, 2],
+      color: 0x4a3028,
+      emissive: 0x441100,
+      emissiveIntensity: 0.15,
+      normalScale: 1,
+      roughness: 0.9,
+    })
+    const dike = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.8 + d * 0.4, 0.38), mat)
+    dike.position.set(-1.2 + d * 1.1, 0.55 + d * 0.28, -0.6 + d * 0.4)
     dike.rotation.z = 0.15 - d * 0.08
-    clipMaterials.push(dike.material as THREE.Material)
+    clipMaterials.push(mat)
     root.add(dike)
     dikes.push(dike)
   }
 
-  const coneGeo = new THREE.LatheGeometry(volcanoProfilePoints(), 48)
+  const coneGeo = new THREE.LatheGeometry(volcanoProfilePoints(), 72)
+  const pos = coneGeo.attributes.position as THREE.BufferAttribute
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i)
+    const y = pos.getY(i)
+    const z = pos.getZ(i)
+    const radial = Math.hypot(x, z)
+    const ang = Math.atan2(z, x)
+    const n = fbm(ang * 1.4 + 3, y * 1.7, 12, 4)
+    const nr = radial * (1 + (n - 0.5) * 0.09)
+    pos.setX(i, Math.cos(ang) * nr)
+    pos.setZ(i, Math.sin(ang) * nr)
+  }
   coneGeo.computeVertexNormals()
-  const cone = new THREE.Mesh(coneGeo, makeRockMat(0xc4a882))
+  const cone = new THREE.Mesh(coneGeo, makeRockMat(0xd2b48c, [2.5, 3]))
   cone.castShadow = true
   cone.receiveShadow = true
   root.add(cone)
 
   for (let layer = 0; layer < 5; layer++) {
-    const y0 = 0.4 + layer * 0.85
+    const y0 = 0.45 + layer * 0.82
     const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(3.5 - layer * 0.55, 0.06, 8, 48),
-      makeRockMat(new THREE.Color().setHSL(0.08, 0.35, 0.32 - layer * 0.03).getHex()),
+      new THREE.TorusGeometry(3.35 - layer * 0.52, 0.055, 8, 56),
+      makeRockMat(new THREE.Color().setHSL(0.07, 0.32, 0.34 - layer * 0.03).getHex(), [1, 1]),
     )
     ring.rotation.x = Math.PI / 2
     ring.position.y = y0
@@ -113,47 +138,72 @@ export function buildVolcano(): VolcanoBuildResult {
     root.add(ring)
   }
 
+  const groundGeo = new THREE.PlaneGeometry(36, 36, 80, 80)
+  groundGeo.rotateX(-Math.PI / 2)
+  const gPos = groundGeo.attributes.position as THREE.BufferAttribute
+  for (let i = 0; i < gPos.count; i++) {
+    const x = gPos.getX(i)
+    const z = gPos.getZ(i)
+    gPos.setY(i, groundHeight(x, z))
+  }
+  groundGeo.computeVertexNormals()
   const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(14, 64),
-    new THREE.MeshStandardMaterial({
-      color: 0x2d4a32,
-      roughness: 0.95,
-      metalness: 0,
-    }),
+    groundGeo,
+    pbrMaterial(lib.soil, { repeat: [8, 8], normalScale: 1.05, roughness: 0.96 }),
   )
-  ground.rotation.x = -Math.PI / 2
-  ground.position.y = -0.02
   ground.receiveShadow = true
   root.add(ground)
+
+  const talusGeo = new THREE.DodecahedronGeometry(0.22, 0)
+  const talusMat = pbrMaterial(lib.rock, { repeat: [1, 1], color: 0x9a8070, normalScale: 1, roughness: 0.9 })
+  const talus = new THREE.InstancedMesh(talusGeo, talusMat, 36)
+  talus.castShadow = true
+  talus.receiveShadow = true
+  const dummy = new THREE.Object3D()
+  for (let i = 0; i < 36; i++) {
+    const ang = (i / 36) * Math.PI * 2
+    const rad = 3.6 + (i % 5) * 0.28
+    const x = Math.cos(ang) * rad
+    const z = Math.sin(ang) * rad * 0.92
+    dummy.position.set(x, groundHeight(x, z) + 0.08, z)
+    dummy.rotation.set(i * 0.4, ang, i * 0.2)
+    const s = 0.55 + (i % 4) * 0.18
+    dummy.scale.setScalar(s)
+    dummy.updateMatrix()
+    talus.setMatrixAt(i, dummy.matrix)
+  }
+  root.add(talus)
 
   const { group: village, houses } = buildVillage()
   root.add(village)
 
-  const chamberGeo = new THREE.SphereGeometry(1.15, 32, 24)
-  const lavaTex = getLavaTexture()
-  const chamberMat = new THREE.MeshStandardMaterial({
-    map: lavaTex,
-    emissive: new THREE.Color(0xff4400),
-    emissiveIntensity: 0.8,
-    roughness: 0.4,
-    metalness: 0.1,
-    transparent: true,
-    opacity: 0.95,
+  const lavaMat = pbrMaterial(lib.lava, {
+    repeat: [2, 3],
+    emissive: 0xff5500,
+    emissiveIntensity: 1.1,
+    roughness: 0.45,
+    normalScale: 0.8,
+    side: THREE.DoubleSide,
   })
+  const chamber = new THREE.Mesh(new THREE.SphereGeometry(1.15, 36, 28), lavaMat.clone())
+  const chamberMat = chamber.material as THREE.MeshStandardMaterial
+  chamberMat.transparent = true
+  chamberMat.opacity = 0.96
   clipMaterials.push(chamberMat)
-  const chamber = new THREE.Mesh(chamberGeo, chamberMat)
   chamber.position.set(0, 0.85, 0)
   chamber.scale.set(1.4, 0.75, 1.2)
   root.add(chamber)
 
   const magmaCore = new THREE.Mesh(
-    new THREE.SphereGeometry(0.85, 24, 16),
+    new THREE.SphereGeometry(0.85, 28, 20),
     new THREE.MeshStandardMaterial({
-      emissive: 0xffaa00,
-      emissiveIntensity: 1.2,
+      emissive: 0xffaa22,
+      emissiveIntensity: 1.3,
       color: 0xff6600,
+      roughness: 0.35,
+      metalness: 0.05,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.92,
     }),
   )
   magmaCore.position.copy(chamber.position)
@@ -161,79 +211,85 @@ export function buildVolcano(): VolcanoBuildResult {
   clipMaterials.push(magmaCore.material as THREE.Material)
   root.add(magmaCore)
 
-  const conduitGeo = new THREE.CylinderGeometry(0.35, 0.55, 3.6, 24, 1, true)
-  const conduitMat = new THREE.MeshStandardMaterial({
-    color: 0x4a3025,
-    roughness: 0.9,
-    metalness: 0.05,
-    emissive: new THREE.Color(0x331100),
-    emissiveIntensity: 0.2,
+  const conduitMat = pbrMaterial(lib.rock, {
+    repeat: [1, 3],
+    color: 0x6a5048,
+    emissive: 0x331100,
+    emissiveIntensity: 0.25,
+    roughness: 0.88,
+    normalScale: 0.9,
     side: THREE.DoubleSide,
   })
   clipMaterials.push(conduitMat)
-  const conduit = new THREE.Mesh(conduitGeo, conduitMat)
+  const conduit = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, 3.6, 28, 1, true), conduitMat)
   conduit.position.set(0, 2.6, 0)
   root.add(conduit)
 
-  const lavaFlowGeo = new THREE.PlaneGeometry(3.2, 7, 16, 32)
-  const pos = lavaFlowGeo.getAttribute('position') as THREE.BufferAttribute
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i)
-    const y = pos.getY(i)
-    const seed = Math.sin(i * 12.9898) * 43758.5453
-    const r = seed - Math.floor(seed)
-    pos.setZ(i, Math.sin(x * 1.2) * 0.15 + r * 0.05)
-    pos.setY(i, y - Math.abs(x) * 0.28)
+  const lavaFlowGeo = new THREE.PlaneGeometry(3.2, 7, 20, 40)
+  const flowPos = lavaFlowGeo.getAttribute('position') as THREE.BufferAttribute
+  for (let i = 0; i < flowPos.count; i++) {
+    const x = flowPos.getX(i)
+    const y = flowPos.getY(i)
+    const n = fbm(x * 1.4, y * 0.6, 18, 3)
+    flowPos.setZ(i, Math.sin(x * 1.2) * 0.12 + (n - 0.5) * 0.08)
+    flowPos.setY(i, y - Math.abs(x) * 0.28)
   }
   lavaFlowGeo.rotateX(-Math.PI / 2)
-  lavaFlowGeo.translate(2.0, 0.05, 1.2)
-  const lavaMat = new THREE.MeshStandardMaterial({
-    map: lavaTex,
-    emissive: new THREE.Color(0xff5500),
-    emissiveIntensity: 1,
-    roughness: 0.35,
-    metalness: 0.05,
-    side: THREE.DoubleSide,
-  })
-  const lavaFlow = new THREE.Mesh(lavaFlowGeo, lavaMat)
+  lavaFlowGeo.translate(2.0, 0.08, 1.2)
+  lavaFlowGeo.computeVertexNormals()
+  const flowMat = lavaMat.clone()
+  if (flowMat.map) {
+    flowMat.map = flowMat.map.clone()
+    flowMat.map.wrapS = flowMat.map.wrapT = THREE.RepeatWrapping
+    flowMat.map.needsUpdate = true
+  }
+  const lavaFlow = new THREE.Mesh(lavaFlowGeo, flowMat)
   lavaFlow.receiveShadow = true
   root.add(lavaFlow)
 
-  const crustGeo = lavaFlowGeo.clone()
-  const crustMat = new THREE.MeshStandardMaterial({
-    color: 0x1a1110,
-    roughness: 0.98,
-    metalness: 0.02,
-    emissive: 0x220800,
-    emissiveIntensity: 0.05,
+  const crustMat = pbrMaterial(lib.crust, {
+    repeat: [2, 3],
+    emissive: 0xff3300,
+    emissiveIntensity: 0.35,
+    roughness: 0.96,
+    normalScale: 1.2,
     transparent: true,
     opacity: 0,
     side: THREE.DoubleSide,
+    depthWrite: false,
   })
-  const lavaCrust = new THREE.Mesh(crustGeo, crustMat)
-  lavaCrust.position.copy(lavaFlow.position)
-  lavaCrust.rotation.copy(lavaFlow.rotation)
-  lavaCrust.scale.copy(lavaFlow.scale)
+  const lavaCrust = new THREE.Mesh(lavaFlowGeo.clone(), crustMat)
   root.add(lavaCrust)
 
-  const craterGlow = new THREE.PointLight(0xff6622, 0, 8, 2)
-  craterGlow.position.set(0, 4.55, 0)
+  const craterPool = new THREE.Mesh(new THREE.CircleGeometry(0.46, 36), flowMat)
+  craterPool.rotation.x = -Math.PI / 2
+  craterPool.position.y = 4.42
+  root.add(craterPool)
+
+  const craterCrust = new THREE.Mesh(new THREE.CircleGeometry(0.46, 36), crustMat)
+  craterCrust.rotation.x = -Math.PI / 2
+  craterCrust.position.y = 4.435
+  root.add(craterCrust)
+
+  const craterGlow = new THREE.PointLight(0xff6622, 0, 9, 1.6)
+  craterGlow.position.set(0, 4.6, 0)
   root.add(craterGlow)
 
-  const rim = new THREE.Mesh(
-    new THREE.TorusGeometry(0.55, 0.08, 12, 32),
-    makeRockMat(0x5c4033),
-  )
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.09, 12, 40), makeRockMat(0x5c4033, [2, 1]))
   rim.rotation.x = Math.PI / 2
-  rim.position.y = 4.45
+  rim.position.y = 4.52
+  rim.castShadow = true
   root.add(rim)
 
   return {
     root,
+    cone,
     chamber,
     conduit,
     lavaFlow,
     lavaCrust,
+    craterPool,
+    craterCrust,
     craterGlow,
     clipMaterials,
     geologyLayers,

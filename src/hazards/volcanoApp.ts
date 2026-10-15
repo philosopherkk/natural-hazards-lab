@@ -3,6 +3,7 @@ import { computeEruptionState } from '../model/eruptionModel'
 import { formatVolcanoMetric } from '../shared/formatMetricValue'
 import { mountHazardShell, type HazardShellRefs } from '../shared/hazardShell'
 import { VolcanoScene, type InitProgressStep } from '../scene/VolcanoScene'
+import { WebGLUnavailableError } from '../scene/sceneBootstrap'
 
 export function mountVolcanoApp(): () => void {
   let scene: VolcanoScene | null = null
@@ -78,7 +79,13 @@ export function mountVolcanoApp(): () => void {
       refs.loading.hidden = true
       refs.refreshReadouts()
     } catch (err) {
-      refs.loading.textContent = `${common.loading}: ${err instanceof Error ? err.message : String(err)}`
+      const msg =
+        err instanceof WebGLUnavailableError
+          ? common.webglUnavailable
+          : err instanceof Error
+            ? err.message
+            : String(err)
+      refs.loading.textContent = `${common.loadingFailed}: ${msg}`
     }
   }
 }
