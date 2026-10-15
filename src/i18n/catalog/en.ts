@@ -1,3 +1,7 @@
+import { AVALANCHE_DEPTH, AVALANCHE_SLOPE } from '../../model/avalancheModel'
+import { EARTHQUAKE_DISTANCE, EARTHQUAKE_MW } from '../../model/earthquakeModel'
+import { VOLCANO_HEIGHT, VOLCANO_TEMP, VOLCANO_VOLUME } from '../../model/eruptionModel'
+import { TSUNAMI_SHELF, TSUNAMI_SLIP } from '../../model/tsunamiModel'
 import {
   avalancheStagesEn,
   earthquakeStagesEn,
@@ -23,6 +27,8 @@ export const enCatalog: LocaleCatalog = {
     stageStepWindow: 'Step window',
     legendHeading: 'Legend',
     helpHeading: 'Controls & accessibility',
+    conditionsHeading: 'Conditions',
+    conditionsAria: 'Physical conditions for this scenario',
     footerVersion: 'Version',
     footerUpdated: 'Updated',
     loading: 'Initializing WebGL scene…',
@@ -79,7 +85,7 @@ export const enCatalog: LocaleCatalog = {
       intensityAria: 'Scale vent discharge, plume height, and lava output',
       canvasAria: 'Three-dimensional volcano with eruption animation',
       helpIntro:
-        'Scrub a 30-second eruption cycle. Engineering mode shows Hagen–Poiseuille flux and Arrhenius viscosity; simple mode uses plain-language analogies.',
+        'Scrub a 30-second eruption cycle. Conditions set edifice height, erupted volume, and magma temperature. Engineering mode shows Hagen–Poiseuille flux and Arrhenius viscosity; simple mode uses plain-language analogies.',
       stageHeading: 'Eruption stage',
       engineeringHeading: 'Readouts',
       explainSimple: 'Simple',
@@ -101,13 +107,45 @@ export const enCatalog: LocaleCatalog = {
         lavaFlow: 'Lava flow',
         plume: 'Eruption plume',
       },
+      conditions: [
+        {
+          id: 'heightM',
+          label: 'Volcano height',
+          symbol: 'H',
+          unit: 'm',
+          ...VOLCANO_HEIGHT,
+          equation: 'L = H in Q = π r⁴ ΔP / (8 η L)',
+          simple: 'A taller volcano is a longer pipe, so lava squeezes through more slowly.',
+          aria: 'Volcano height in meters',
+        },
+        {
+          id: 'lavaVolume_Mm3',
+          label: 'Erupted lava volume',
+          symbol: 'V',
+          unit: '×10⁶ m³',
+          ...VOLCANO_VOLUME,
+          equation: 'r ∝ (V/V_ref)^{1/4}; ΔP = K ΔV/V₀; x_f from Q/(W d)',
+          simple: 'More lava means a wider flow that reaches farther down the slope.',
+          aria: 'Erupted lava volume in millions of cubic meters',
+        },
+        {
+          id: 'magmaTempC',
+          label: 'Magma temperature',
+          symbol: 'T',
+          unit: '°C',
+          ...VOLCANO_TEMP,
+          equation: 'η = η_ref exp(Ea/R (1/T − 1/T_ref))',
+          simple: 'Hotter magma is runnier and pours out faster.',
+          aria: 'Magma temperature in degrees Celsius',
+        },
+      ],
       metrics: [
         {
           id: 'p_chamber',
           label: 'Chamber overpressure',
           symbol: 'P',
           unit: 'MPa',
-          formula: 'ΔP ∝ −K·ΔV/V (bulk modulus)',
+          formula: 'P = K·(βV/V₀)·(R_c/R_ref)^0.45',
           simple: 'Think of pressure like air pushing inside a balloon before it pops.',
         },
         {
@@ -239,7 +277,7 @@ export const enCatalog: LocaleCatalog = {
       intensityAria: 'Steepness, slab size, and flow speed',
       canvasAria: 'Mountain slope with snow avalanche animation',
       helpIntro:
-        'Watch slab fracture and Voellmy-style runout on a 30-second timeline. Toggle simple analogies or friction, density, and impact pressure formulas.',
+        'Set snow depth and slope angle, then watch slab fracture and Voellmy runout on a 30-second timeline. Toggle simple analogies or the friction, density, and impact formulas.',
       stageHeading: 'Avalanche stage',
       engineeringHeading: 'Readouts',
       explainSimple: 'Simple',
@@ -250,6 +288,28 @@ export const enCatalog: LocaleCatalog = {
       loadingWebgl: 'Starting WebGL…',
       loadingModel: 'Building slope & snowpack…',
       loadingEffects: 'Preparing flow particles…',
+      conditions: [
+        {
+          id: 'snowDepthM',
+          label: 'Snow depth',
+          symbol: 'h',
+          unit: 'm',
+          ...AVALANCHE_DEPTH,
+          equation: 'V = A h; v = √(ξ h (sinα − μ cosα)); P = ½ ρ v²',
+          simple: 'Deeper snow is a heavier slab that runs farther and hits harder.',
+          aria: 'Snow depth in meters',
+        },
+        {
+          id: 'slopeAngleDeg',
+          label: 'Slope angle',
+          symbol: 'α',
+          unit: '°',
+          ...AVALANCHE_SLOPE,
+          equation: 'H = S sin α; L = (H/tan α)(1 − μ/tan α)·(h/h_ref)',
+          simple: 'A steeper slope drops farther and sends the slide faster.',
+          aria: 'Slope angle in degrees',
+        },
+      ],
       metrics: [
         {
           id: 'slope',
@@ -280,7 +340,7 @@ export const enCatalog: LocaleCatalog = {
           label: 'Runout distance',
           symbol: 'L',
           unit: 'm',
-          formula: 'L ~ h/tan α · (1 − μ/tan α)',
+          formula: 'L = (H/tan α)(1 − μ/tan α)·(h/h_ref)',
           simple: 'How far the white wave travels down the valley.',
         },
         {
@@ -288,7 +348,7 @@ export const enCatalog: LocaleCatalog = {
           label: 'Flow speed',
           symbol: 'v',
           unit: 'm/s',
-          formula: 'v ≈ √(2gH) drop proxy',
+          formula: 'v = min(√(2gH), √(ξ h (sinα − μ cosα)))',
           simple: 'How fast the avalanche zooms—like a runaway sled.',
         },
         {
@@ -312,7 +372,7 @@ export const enCatalog: LocaleCatalog = {
           label: 'Released volume',
           symbol: 'V',
           unit: '×10³ m³',
-          formula: 'V from slab area × depth',
+          formula: 'V = A · h; m = ρ V',
           simple: 'How much snow let go at once.',
         },
         {
@@ -340,7 +400,7 @@ export const enCatalog: LocaleCatalog = {
       intensityAria: 'Fault slip, wave height, and inundation',
       canvasAria: 'Ocean and coast with tsunami wave animation',
       helpIntro:
-        'Fault slip drives wave height H; shallow-water celerity c = √(gh) sets arrival time. Froude number tracks wave steepness at shore.',
+        'Set offshore slip and shelf depth. Wave height follows slip and shoaling; shallow-water celerity is c = √(gh).',
       stageHeading: 'Tsunami stage',
       engineeringHeading: 'Readouts',
       explainSimple: 'Simple',
@@ -351,6 +411,28 @@ export const enCatalog: LocaleCatalog = {
       loadingWebgl: 'Starting WebGL…',
       loadingModel: 'Building ocean & coast…',
       loadingEffects: 'Animating wave surface…',
+      conditions: [
+        {
+          id: 'slipM',
+          label: 'Offshore fault slip',
+          symbol: 'D',
+          unit: 'm',
+          ...TSUNAMI_SLIP,
+          equation: 'H₀ ∝ D; H = H₀ (h_ref / h)^{1/4}',
+          simple: 'A bigger jump of the seafloor raises a taller wave.',
+          aria: 'Offshore fault slip in meters',
+        },
+        {
+          id: 'shelfDepthM',
+          label: 'Shelf depth',
+          symbol: 'h',
+          unit: 'm',
+          ...TSUNAMI_SHELF,
+          equation: 'c = √(g h); shoaling H ∝ h^{−1/4}',
+          simple: 'Shallower water slows the wave and piles it higher.',
+          aria: 'Shelf water depth in meters',
+        },
+      ],
       metrics: [
         {
           id: 'slip',
@@ -365,7 +447,7 @@ export const enCatalog: LocaleCatalog = {
           label: 'Wave height',
           symbol: 'H',
           unit: 'm',
-          formula: 'H ~ D · bathymetry factor',
+          formula: 'H = H₀(D) · (h_ref/h)^{1/4}',
           simple: 'How tall the ocean wave is—like a moving hill of water.',
         },
         {
@@ -441,7 +523,7 @@ export const enCatalog: LocaleCatalog = {
       intensityAria: 'Slip rate, magnitude proxy, and shaking',
       canvasAria: 'Fault cutaway with seismic waves and buildings',
       helpIntro:
-        'Mw proxy from slip × area; PGA and Sa(0.3 s) drive building damage. P-waves arrive before slower S-waves.',
+        'Set moment magnitude and distance to the fault. PGA follows 10^{0.5(Mw−6)} and fades with distance. P-waves arrive before S-waves.',
       stageHeading: 'Earthquake stage',
       engineeringHeading: 'Readouts',
       explainSimple: 'Simple',
@@ -452,6 +534,28 @@ export const enCatalog: LocaleCatalog = {
       loadingWebgl: 'Starting WebGL…',
       loadingModel: 'Building fault & city…',
       loadingEffects: 'Animating wave fronts…',
+      conditions: [
+        {
+          id: 'magnitudeMw',
+          label: 'Earthquake level',
+          symbol: 'M_w',
+          unit: '—',
+          ...EARTHQUAKE_MW,
+          equation: 'M₀ = 10^{(3/2)Mw+9.1}; L = √(M₀/(μ W ε)); PGA ∝ 10^{0.5(Mw−6)}',
+          simple: 'A higher magnitude is a bigger quake with a longer break in the fault.',
+          aria: 'Moment magnitude',
+        },
+        {
+          id: 'distanceKm',
+          label: 'Distance to fault',
+          symbol: 'R',
+          unit: 'km',
+          ...EARTHQUAKE_DISTANCE,
+          equation: 'D(R) = ((R_sat+R_ref)/(R_sat+R))^{1.5}; PGA(R) = PGA₀ D(R)',
+          simple: 'Farther from the fault, the shaking fades.',
+          aria: 'Distance to the fault in kilometers',
+        },
+      ],
       metrics: [
         {
           id: 'mw',
@@ -466,7 +570,7 @@ export const enCatalog: LocaleCatalog = {
           label: 'Peak ground acceleration',
           symbol: 'PGA',
           unit: 'm/s²',
-          formula: 'PGA ∝ 10^{0.5(Mw−6)} · envelope',
+          formula: 'PGA = 0.15·10^{0.5(Mw−6)} · D(R) · envelope',
           simple: 'How hard the ground jolts—like a jerky bus stop.',
         },
         {
@@ -474,8 +578,24 @@ export const enCatalog: LocaleCatalog = {
           label: 'Fault slip',
           symbol: 'δ',
           unit: 'm',
-          formula: 'M₀ = μ A δ',
+          formula: 'M₀ = μ A δ; δ = ε L',
           simple: 'How far one side of the fault moves past the other.',
+        },
+        {
+          id: 'rupture_length',
+          label: 'Rupture length',
+          symbol: 'L',
+          unit: 'km',
+          formula: 'L = √(M₀ / (μ W ε))',
+          simple: 'How long the torn patch of fault is.',
+        },
+        {
+          id: 'moment',
+          label: 'Seismic moment',
+          symbol: 'M₀',
+          unit: 'N·m',
+          formula: 'M₀ = 10^{((3/2) Mw + 9.1)}',
+          simple: 'The total size of the quake, as a very large number.',
         },
         {
           id: 'duration',

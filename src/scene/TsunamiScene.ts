@@ -1,6 +1,11 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { computeTsunamiState, type TsunamiState } from '../model/tsunamiModel'
+import {
+  computeTsunamiState,
+  DEFAULT_TSUNAMI_CONDITIONS,
+  type TsunamiConditions,
+  type TsunamiState,
+} from '../model/tsunamiModel'
 import { fbm, mulberry32 } from './noise'
 
 function coastHeight(x: number, z: number): number {
@@ -41,6 +46,7 @@ export class TsunamiScene {
   private baseWaterY = 0.15
   private oceanBase: Float32Array | null = null
   private intensity = 0.65
+  private conditions: TsunamiConditions = { ...DEFAULT_TSUNAMI_CONDITIONS }
   private timeSec = 0
   private raf = 0
 
@@ -73,7 +79,7 @@ export class TsunamiScene {
     onProgress?.('model')
     instance.buildWorld()
     await yieldFrame()
-    instance.applyState(computeTsunamiState(0, instance.intensity))
+    instance.applyState(computeTsunamiState(0, instance.intensity, instance.conditions))
     instance.renderOnce()
     onProgress?.('interactive')
     scheduleIdle(() => onProgress?.('effects'))
@@ -282,16 +288,21 @@ export class TsunamiScene {
 
   setTime(t: number) {
     this.timeSec = t
-    this.applyState(computeTsunamiState(t, this.intensity))
+    this.applyState(computeTsunamiState(t, this.intensity, this.conditions))
   }
 
   setIntensity(v: number) {
     this.intensity = THREE.MathUtils.clamp(v, 0, 1)
-    this.applyState(computeTsunamiState(this.timeSec, this.intensity))
+    this.applyState(computeTsunamiState(this.timeSec, this.intensity, this.conditions))
+  }
+
+  setConditions(conditions: TsunamiConditions) {
+    this.conditions = { ...conditions }
+    this.applyState(computeTsunamiState(this.timeSec, this.intensity, this.conditions))
   }
 
   getState(): TsunamiState {
-    return computeTsunamiState(this.timeSec, this.intensity)
+    return computeTsunamiState(this.timeSec, this.intensity, this.conditions)
   }
 
   private applyState(s: TsunamiState) {
@@ -334,13 +345,15 @@ export class TsunamiScene {
     this.waveRing.position.x = frontX
     ;(this.waveRing.material as THREE.MeshBasicMaterial).opacity = 0.08 + s.waveHeight_m * 0.03
 
-    this.shapeBore(frontX, Math.max(0.35, s.waveHeight_m * 0.85 * (1 + travel * 1.6)), travel)
+    this.shapeBore(frontX, Math.max(0.2, s.waveHeight_m * 0.9 * (0.65 + travel * 1.5)), travel)
     const boreMat = this.bore.material as THREE.ShaderMaterial
     boreMat.uniforms.uTime!.value = s.timeSec
     boreMat.uniforms.uCamPos!.value.copy(this.camera.position)
 
     const flood = s.inundationDepth_m > 0.35
     this.floodPlane.visible = flood
+    const sheet = THREE.MathUtils.clamp(0.4 + s.inundationDepth_m * 0.2, 0.35, 3.2)
+    this.floodPlane.scale.set(sheet, 0.65 + s.waveHeight_m * 0.05, 1)
     this.floodPlane.position.set(11.4, coastHeight(11.4, 0) + 0.08 + s.inundationDepth_m * 0.12, 0)
     const floodMat = this.floodPlane.material as THREE.ShaderMaterial
     floodMat.uniforms.uTime!.value = s.timeSec

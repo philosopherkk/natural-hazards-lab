@@ -1,6 +1,11 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { computeEarthquakeState, type EarthquakeState } from '../model/earthquakeModel'
+import {
+  computeEarthquakeState,
+  DEFAULT_EARTHQUAKE_CONDITIONS,
+  type EarthquakeConditions,
+  type EarthquakeState,
+} from '../model/earthquakeModel'
 import { buildVillage, applyHouseSeverity } from './villageBuilder'
 import { fbm } from './noise'
 import { ensurePbrLibraryAsync, getPbrLibrary, pbrMaterial } from './pbrLibrary'
@@ -35,6 +40,7 @@ export class EarthquakeScene {
   private village!: ReturnType<typeof buildVillage>
   private clipPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), -1.2)
   private intensity = 0.65
+  private conditions: EarthquakeConditions = { ...DEFAULT_EARTHQUAKE_CONDITIONS }
   private timeSec = 0
   private raf = 0
 
@@ -68,7 +74,7 @@ export class EarthquakeScene {
     onProgress?.('model')
     instance.buildWorld()
     await yieldFrame()
-    instance.applyState(computeEarthquakeState(0, instance.intensity))
+    instance.applyState(computeEarthquakeState(0, instance.intensity, instance.conditions))
     instance.renderOnce()
     onProgress?.('interactive')
     scheduleIdle(() => onProgress?.('effects'))
@@ -244,20 +250,25 @@ export class EarthquakeScene {
 
   setTime(t: number) {
     this.timeSec = t
-    this.applyState(computeEarthquakeState(t, this.intensity))
+    this.applyState(computeEarthquakeState(t, this.intensity, this.conditions))
   }
 
   setIntensity(v: number) {
     this.intensity = THREE.MathUtils.clamp(v, 0, 1)
-    this.applyState(computeEarthquakeState(this.timeSec, this.intensity))
+    this.applyState(computeEarthquakeState(this.timeSec, this.intensity, this.conditions))
+  }
+
+  setConditions(conditions: EarthquakeConditions) {
+    this.conditions = { ...conditions }
+    this.applyState(computeEarthquakeState(this.timeSec, this.intensity, this.conditions))
   }
 
   getState(): EarthquakeState {
-    return computeEarthquakeState(this.timeSec, this.intensity)
+    return computeEarthquakeState(this.timeSec, this.intensity, this.conditions)
   }
 
   private applyState(s: EarthquakeState) {
-    const slip = s.faultSlip_m
+    const slip = Math.tanh(s.faultSlip_m / 5) * 5
     this.faultGlow.position.set(slip * 0.12, 0.06 + slip * 0.04, this.faultZ)
     const glowMat = this.faultGlow.material as THREE.MeshStandardMaterial
     glowMat.emissiveIntensity = 0.25 + s.shaking * 1.15
@@ -293,9 +304,10 @@ export class EarthquakeScene {
       ;(ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.07 + s.shaking * 0.26 - i * 0.05)
     })
 
-    const shake = s.shaking * 0.1
+    const shake = Math.min(0.62, s.shaking * (0.02 + s.peakGroundAccel_m_s2 * 0.1))
+    const zFar = THREE.MathUtils.clamp((s.distanceKm - 8) * 0.05, -0.7, 3.4)
     this.cityRoot.position.x = Math.sin(s.timeSec * 24) * shake
-    this.cityRoot.position.z = Math.cos(s.timeSec * 21) * shake
+    this.cityRoot.position.z = zFar + Math.cos(s.timeSec * 21) * shake
     this.camera.position.x = 12 + Math.sin(s.timeSec * 18) * shake * 0.35
     this.camera.position.z = 13 + Math.cos(s.timeSec * 16) * shake * 0.35
 

@@ -29,6 +29,23 @@ export interface MetricCopy {
   simple: string
 }
 
+/** Expert slider. The value is an input to the hazard model, not a display-only multiplier. */
+export interface ConditionCopy {
+  id: string
+  label: string
+  symbol: string
+  unit: string
+  min: number
+  max: number
+  step: number
+  defaultValue: number
+  /** Engineering mode: the equation this input enters. */
+  equation: string
+  /** Simple mode: one plain sentence. */
+  simple: string
+  aria: string
+}
+
 export interface HazardCopy {
   id: HazardId
   title: string
@@ -47,6 +64,8 @@ export interface HazardCopy {
   loadingWebgl: string
   loadingModel: string
   loadingEffects: string
+  /** Expert physical conditions. Empty hides the panel. */
+  conditions?: ConditionCopy[]
   /** Optional hazard-specific toggles (volcano cutaway/labels). */
   toggles?: { id: string; label: string; aria: string }[]
   /** Volcano anatomy labels (3D callouts). */
@@ -86,6 +105,8 @@ export interface CommonCopy {
   stageStepWindow: string
   legendHeading: string
   helpHeading: string
+  conditionsHeading: string
+  conditionsAria: string
   footerVersion: string
   footerUpdated: string
   loading: string

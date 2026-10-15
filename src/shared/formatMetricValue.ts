@@ -94,11 +94,15 @@ export function formatTsunamiMetric(id: string, s: TsunamiState): string {
 export function formatEarthquakeMetric(id: string, s: EarthquakeState): string {
   switch (id) {
     case 'mw':
-      return s.magnitudeMw.toFixed(2)
+      return s.magnitudeMw > 0.2 ? s.magnitudeMw.toFixed(2) : '—'
     case 'pga':
       return s.peakGroundAccel_m_s2.toFixed(2)
     case 'slip':
       return s.faultSlip_m.toFixed(2)
+    case 'rupture_length':
+      return s.ruptureLength_km.toFixed(1)
+    case 'moment':
+      return s.seismicMoment_Nm > 0 ? s.seismicMoment_Nm.toExponential(2) : '—'
     case 'duration':
       return s.ruptureDuration_s.toFixed(1)
     case 'sa':

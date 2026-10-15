@@ -1,7 +1,12 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
-import { computeEruptionState, type EruptionState } from '../model/eruptionModel'
+import {
+  computeEruptionState,
+  DEFAULT_VOLCANO_CONDITIONS,
+  type EruptionState,
+  type VolcanoConditions,
+} from '../model/eruptionModel'
 import { buildVolcano } from './volcanoBuilder'
 import { lumpyCloud, revealChannel } from './meshForms'
 import { createPlumeMaterial } from './surfaceShaders'
@@ -43,6 +48,7 @@ export class VolcanoScene {
   private animationId = 0
   private timeSec = 0
   private intensity = 0.65
+  private conditions: VolcanoConditions = { ...DEFAULT_VOLCANO_CONDITIONS }
   private container: HTMLElement
   private loopRunning = false
   private readoutListener: EngineeringReadoutListener | null = null
@@ -230,9 +236,14 @@ export class VolcanoScene {
     this.renderAt(this.timeSec, this.intensity)
   }
 
+  setConditions(conditions: VolcanoConditions) {
+    this.conditions = { ...conditions }
+    this.renderAt(this.timeSec, this.intensity)
+  }
+
   /** Deterministic scene + physics state from timeline position. */
   renderAt(timeSec: number, intensity: number) {
-    const state = computeEruptionState(timeSec, intensity)
+    const state = computeEruptionState(timeSec, intensity, this.conditions)
     this.lastState = state
     this.readoutListener?.(state)
     this.applyEruptionState(state)
@@ -259,10 +270,20 @@ export class VolcanoScene {
       1.2 * (0.85 + state.chamberFill * 0.2),
     )
 
+    const yScale = THREE.MathUtils.clamp(state.edificeHeightM / 2200, 0.22, 1.7)
+    this.build.cone.scale.set(1, yScale, 1)
     const conduitMat = this.build.conduit.material as THREE.MeshStandardMaterial
     conduitMat.emissiveIntensity = 0.1 + a * 0.9 + (state.Q_m3s > 0 ? 0.35 : 0)
-    const conduitScale = 1 + (state.conduitRadiusM / 1.8 - 1) * 0.15
-    this.build.conduit.scale.set(conduitScale, 1, conduitScale)
+    const conduitRadial = 1 + (state.conduitRadiusM / 1.8 - 1) * 0.15
+    this.build.conduit.scale.set(conduitRadial, yScale, conduitRadial)
+    this.build.conduit.position.y = 0.8 + 1.8 * yScale
+    const craterLift = (yScale - 1) * 4.55
+    this.build.craterPool.position.y = 4.42 + craterLift
+    this.build.craterCrust.position.y = 4.435 + craterLift
+    this.build.craterGlow.position.y = 4.6 + craterLift
+    if (this.craterSprite) this.craterSprite.position.y = 4.7 + craterLift
+    this.build.lavaFlow.scale.y = yScale
+    this.build.lavaCrust.scale.y = yScale
 
     this.build.craterGlow.intensity = a * 4.2 * state.intensity
     const lavaMat = this.build.lavaFlow.material as THREE.ShaderMaterial
@@ -270,9 +291,7 @@ export class VolcanoScene {
     lavaMat.uniforms.uHeat!.value = (0.45 + a * 1.5) * (state.Q_m3s > 0 || state.ventOpen ? 1 : 0.25)
     lavaMat.uniforms.uTime!.value = state.timeSec
 
-    const reach = state.ventOpen
-      ? THREE.MathUtils.clamp(Math.max((state.timeSec - 9.5) / 14, state.lavaFrontM / 500), 0, 1)
-      : 0
+    const reach = state.ventOpen ? THREE.MathUtils.clamp(state.lavaFrontM / 1500, 0, 1) : 0
     revealChannel(this.build.lavaFlow, this.build.lavaBase, this.build.lavaAlong, reach, 0.02)
     const crustMat = this.build.lavaCrust.material as THREE.MeshStandardMaterial
     const crustFrac = THREE.MathUtils.clamp(1 - thermal + state.timeSec * 0.012, 0, 0.9)
@@ -299,7 +318,7 @@ export class VolcanoScene {
       const grow = 0.7 + a * (1.15 + i * 0.22)
       mesh.scale.set(grow * (0.85 + i * 0.22), (0.75 + a * 1.05) * (1 + i * 0.12), grow * (0.8 + i * 0.18))
       mat.uniforms.uOpacity!.value = (0.12 + a * 0.2) * (1 - i * 0.08)
-      mesh.position.y = 5.3 + i * (0.7 + a * 0.85)
+      mesh.position.y = 5.3 + craterLift + i * (0.7 + a * 0.85)
       mesh.position.x = a * 0.55 * i + Math.sin(state.timeSec * 0.15 + i) * 0.12
       mesh.position.z = Math.cos(state.timeSec * 0.11 + i * 0.8) * a * 0.35 * i
     })
@@ -310,6 +329,12 @@ export class VolcanoScene {
       const s = 1.5 + a * 3.1
       this.craterSprite.scale.set(s, s, 1)
     }
+
+    const labelY = [0.9, 0.8 + 2.0 * yScale, 4.7 + craterLift, 0.45, 8.2 + craterLift]
+    this.labelObjects.forEach((obj, i) => {
+      const y = labelY[i]
+      if (y !== undefined) obj.position.y = y
+    })
 
     const buildUp = state.timeSec < 10 ? Math.sin(state.timeSec * 0.8) * 0.02 : 0
     this.build.chamber.scale.y = 0.75 + buildUp + a * 0.08 + (state.P_chamber_MPa / 30) * 0.04

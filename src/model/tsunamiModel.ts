@@ -1,6 +1,41 @@
-/** Tsunami — shallow-water wave celerity c ≈ √(gh) and run-up teaching model. */
+/**
+ * Tsunami — shallow-water celerity and the existing shoaling / run-up chain.
+ *
+ * Input → equation → estimate
+ *   D (m) offshore fault slip, the scenario maximum.
+ *         The existing slip pulse still shapes D(t); the peak is the slider.
+ *         Source height H₀ ∝ D (same H ~ D · bathymetry factor as before).
+ *   h (m) shelf / nearshore depth.
+ *         Celerity c = √(g h). Wave front x = c Δt.
+ *         Green's law shoals the wave onto that shelf:
+ *           H = H₀ (h_ref / h)^(1/4)
+ *   Run-up keeps R = H · (slope amplification from intensity) · arrival.
+ *   Inundation depth is the existing shoreline proxy of R.
+ *   Coastal structures flood, or collapse, from inundation depth.
+ */
 const G = 9.81
 const TIMELINE = 30
+const SHELF_REF_M = 18
+
+export const TSUNAMI_SLIP = { min: 0.5, max: 15, step: 0.1, defaultValue: 5 }
+export const TSUNAMI_SHELF = { min: 8, max: 160, step: 1, defaultValue: 18 }
+
+export const TSUNAMI_CONDITION_SPECS = {
+  slipM: TSUNAMI_SLIP,
+  shelfDepthM: TSUNAMI_SHELF,
+} as const
+
+export interface TsunamiConditions {
+  /** Offshore fault slip D (m), scenario maximum. */
+  slipM: number
+  /** Shelf / nearshore water depth h (m) in c = √(gh). */
+  shelfDepthM: number
+}
+
+export const DEFAULT_TSUNAMI_CONDITIONS: TsunamiConditions = {
+  slipM: TSUNAMI_SLIP.defaultValue,
+  shelfDepthM: TSUNAMI_SHELF.defaultValue,
+}
 
 export type CoastalSeverity = 'dry' | 'surge' | 'flooded' | 'collapsed'
 
@@ -16,7 +51,9 @@ export interface TsunamiState {
   intensity: number
   /** Fault slip D (m). */
   faultSlip_m: number
-  /** Offshore wave height H (m). */
+  /** Shelf depth h (m). */
+  shelfDepth_m: number
+  /** Offshore / shoaled wave height H (m). */
   waveHeight_m: number
   /** Wavelength λ (km). */
   wavelength_km: number
@@ -45,29 +82,46 @@ function smoothstep(e0: number, e1: number, x: number): number {
   return t * t * (3 - 2 * t)
 }
 
+export function resolveTsunamiConditions(partial?: Partial<TsunamiConditions>): TsunamiConditions {
+  const d = DEFAULT_TSUNAMI_CONDITIONS
+  return {
+    slipM: clamp(partial?.slipM ?? d.slipM, TSUNAMI_SLIP.min, TSUNAMI_SLIP.max),
+    shelfDepthM: clamp(partial?.shelfDepthM ?? d.shelfDepthM, TSUNAMI_SHELF.min, TSUNAMI_SHELF.max),
+  }
+}
+
 /** Slip pulse t≈2–6 s; wave propagates at c; run-up peaks t≈16–22 s. */
-export function computeTsunamiState(timeSec: number, intensity: number): TsunamiState {
+export function computeTsunamiState(
+  timeSec: number,
+  intensity: number,
+  raw?: Partial<TsunamiConditions>,
+): TsunamiState {
+  const cond = resolveTsunamiConditions(raw)
   const I = clamp(intensity, 0, 1)
   const slipPulse = smoothstep(1.5, 5, timeSec) * (1 - smoothstep(6, 8, timeSec))
-  const faultSlip_m = (2.5 + I * 6.5) * slipPulse + smoothstep(5, 12, timeSec) * I * 0.8
+  const residual = smoothstep(5, 12, timeSec)
+  const faultSlip_m = cond.slipM * (slipPulse * 0.85 + residual * 0.15)
+  // The wave keeps the source amplitude after the slip pulse (it has already left the fault).
+  const generated = smoothstep(2, 7, timeSec)
+  const sourceSlip = cond.slipM * generated
 
-  const waveHeight_m = clamp(0.4 + faultSlip_m * (0.35 + I * 0.25), 0, 18)
-  void (3800 - I * 800) // bathymetry sketch (deep ocean depth)
-  const wavelength_km = 40 + I * 90 + waveHeight_m * 8
+  const h0 = generated * 0.15 + sourceSlip * (0.22 + I * 0.12)
+  const shoal = Math.pow(SHELF_REF_M / cond.shelfDepthM, 0.25)
+  const waveHeight_m = clamp(h0 * shoal, 0, 24)
+  const wavelength_km = 40 + I * 70 + waveHeight_m * 6 + cond.shelfDepthM * 0.15
 
-  const hNearshore = 12 + (1 - I) * 8
-  const celerity_m_s = Math.sqrt(G * hNearshore)
+  const celerity_m_s = Math.sqrt(G * cond.shelfDepthM)
 
   const tTravel = Math.max(0, timeSec - 6)
   const waveFront_km = (celerity_m_s * tTravel) / 1000
 
   const arrival = smoothstep(10, 14, timeSec)
-  const runup_m = waveHeight_m * (1.2 + I * 1.8) * arrival
+  const runup_m = waveHeight_m * (0.85 + I * 0.75) * arrival
 
   const phaseSpeed = celerity_m_s * (0.85 + 0.15 * Math.sin(timeSec * 0.4))
   const froudeNumber = waveHeight_m > 0.01 ? phaseSpeed / Math.sqrt(G * waveHeight_m) : 0
 
-  const inundationDepth_m = clamp(runup_m * smoothstep(14, 20, timeSec) - 0.5, 0, runup_m)
+  const inundationDepth_m = clamp(runup_m * smoothstep(14, 20, timeSec) - 0.4, 0, runup_m)
 
   const structures: CoastalStructure[] = COAST_STRUCTURES.map((shoreDistM, i) => {
     const depthAt = inundationDepth_m * Math.max(0, 1 - shoreDistM / 1.2)
@@ -90,6 +144,7 @@ export function computeTsunamiState(timeSec: number, intensity: number): Tsunami
     timeSec,
     intensity: I,
     faultSlip_m,
+    shelfDepth_m: cond.shelfDepthM,
     waveHeight_m,
     wavelength_km,
     celerity_m_s,

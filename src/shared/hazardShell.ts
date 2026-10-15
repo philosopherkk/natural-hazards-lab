@@ -8,7 +8,8 @@ import {
   toggleLocale,
   type HazardId,
 } from '../i18n'
-import type { MetricCopy, StageCopy } from '../i18n/types'
+import type { ConditionCopy, MetricCopy, StageCopy } from '../i18n/types'
+import { clampCondition, loadConditionValues, saveConditionValues, type NumericSpec } from './conditionsStore'
 import { getExplainMode, setExplainMode, type ExplainMode } from './explainMode'
 import {
   getPlaybackSpeed,
@@ -23,6 +24,7 @@ export interface HazardShellOptions {
   onMount: (root: HazardShellRefs) => void | Promise<void>
   onTimeChange?: (timeSec: number) => void
   onIntensityChange?: (intensity: number) => void
+  onConditionsChange?: (values: Record<string, number>) => void
   formatMetric: (metricId: string) => string
   extraKeyboard?: { keys: string; action: string }[]
   onLocaleChange?: () => void
@@ -54,6 +56,7 @@ export interface HazardShellRefs {
   refreshStage: () => void
   applyLocale: () => void
   queryToggle: (id: string) => HTMLInputElement | null
+  getConditions: () => Record<string, number>
 }
 
 export function mountHazardShell(options: HazardShellOptions): () => void {
@@ -112,6 +115,10 @@ export function mountHazardShell(options: HazardShellOptions): () => void {
         <p id="stage-time" class="stage-time"></p>
         <p id="stage-desc" class="stage-desc"></p>
       </article>
+      <section class="side-block conditions-panel" id="conditions-panel">
+        <h2 id="conditions-heading"></h2>
+        <div id="conditions-root" class="conditions-list"></div>
+      </section>
       <section class="side-block engineering-panel">
         <h2 id="engineering-heading">${hazardCopy.engineeringHeading}</h2>
         <dl class="readout-grid" id="readout-grid"></dl>
@@ -149,6 +156,13 @@ export function mountHazardShell(options: HazardShellOptions): () => void {
   let explainMode = getExplainMode()
   let playbackSpeed: PlaybackSpeed = getPlaybackSpeed()
   const speedButtonsRoot = main.querySelector('#speed-buttons')!
+  const conditionSpecs: Record<string, NumericSpec> = {}
+  for (const condition of hazardCopy.conditions ?? []) {
+    conditionSpecs[condition.id] = condition
+  }
+  let conditionValues = loadConditionValues(options.hazard, conditionSpecs)
+  const conditionsPanel = main.querySelector('#conditions-panel') as HTMLElement
+  const conditionsRoot = main.querySelector('#conditions-root') as HTMLElement
 
   const refs: HazardShellRefs = {
     canvasWrap: main.querySelector('#canvas-wrap')!,
@@ -182,6 +196,7 @@ export function mountHazardShell(options: HazardShellOptions): () => void {
     refreshStage: () => renderStage(),
     applyLocale: () => applyLocale(),
     queryToggle: (id) => document.querySelector(`#toggle-${id}`),
+    getConditions: () => ({ ...conditionValues }),
   }
 
   function formatTime(sec: number): string {
@@ -259,6 +274,8 @@ export function mountHazardShell(options: HazardShellOptions): () => void {
     main.querySelector('#intensity-label')!.textContent = copy.intensityLabel
     main.querySelector('#stage-heading')!.textContent = copy.stageHeading
     main.querySelector('#engineering-heading')!.textContent = copy.engineeringHeading
+    main.querySelector('#conditions-heading')!.textContent = commonNow.conditionsHeading
+    conditionsPanel.setAttribute('aria-label', commonNow.conditionsAria)
     main.querySelector('#legend-heading')!.textContent = commonNow.legendHeading
     main.querySelector('#help-heading')!.textContent = commonNow.helpHeading
     main.querySelector('#help-intro')!.textContent = copy.helpIntro
@@ -284,9 +301,75 @@ export function mountHazardShell(options: HazardShellOptions): () => void {
     syncExplainBtn()
     syncTransport()
     buildSpeedButtons()
+    renderConditions()
     renderReadouts()
     renderStage()
     options.onLocaleChange?.()
+  }
+
+  function formatConditionNumber(value: number, step: number): string {
+    const decimals = step < 1 ? Math.min(3, (step.toString().split('.')[1] ?? '').length) : 0
+    return value.toFixed(decimals)
+  }
+
+  function commitCondition(id: string, raw: number) {
+    const spec = conditionSpecs[id]
+    if (!spec) return
+    conditionValues[id] = clampCondition(raw, spec)
+    saveConditionValues(options.hazard, conditionValues)
+    options.onConditionsChange?.({ ...conditionValues })
+    renderReadouts()
+  }
+
+  function renderConditions() {
+    const copy = getHazardCopy(options.hazard)
+    const list = copy.conditions ?? []
+    conditionsPanel.hidden = list.length === 0
+    conditionsRoot.innerHTML = ''
+    for (const condition of list) {
+      const value = conditionValues[condition.id] ?? condition.defaultValue
+      conditionValues[condition.id] = value
+      conditionsRoot.appendChild(buildConditionControl(condition, value, explainMode))
+    }
+  }
+
+  function buildConditionControl(condition: ConditionCopy, value: number, mode: ExplainMode): HTMLElement {
+    const wrap = document.createElement('div')
+    wrap.className = 'condition'
+    const shown = formatConditionNumber(value, condition.step)
+    const note = mode === 'simple' ? condition.simple : condition.equation
+    wrap.innerHTML = `
+      <div class="condition-head">
+        <label for="cond-${options.hazard}-${condition.id}">${condition.label} <span class="metric-symbol">(${condition.symbol})</span></label>
+        <span class="condition-value">
+          <input type="number" id="cond-num-${options.hazard}-${condition.id}" min="${condition.min}" max="${condition.max}" step="${condition.step}" value="${shown}" aria-label="${condition.aria}" />
+          <span class="unit">${condition.unit}</span>
+        </span>
+      </div>
+      <input type="range" id="cond-${options.hazard}-${condition.id}" min="${condition.min}" max="${condition.max}" step="${condition.step}" value="${shown}" aria-valuemin="${condition.min}" aria-valuemax="${condition.max}" aria-valuenow="${shown}" />
+      <p class="condition-bounds">${formatConditionNumber(condition.min, condition.step)}–${formatConditionNumber(condition.max, condition.step)} ${condition.unit}</p>
+      <p class="condition-note">${note}</p>
+    `
+    const range = wrap.querySelector('input[type="range"]') as HTMLInputElement
+    const number = wrap.querySelector('input[type="number"]') as HTMLInputElement
+    const syncPair = (next: number, source: 'range' | 'number') => {
+      const spec = conditionSpecs[condition.id]
+      if (!spec) return
+      const snapped = clampCondition(next, spec)
+      const text = formatConditionNumber(snapped, spec.step)
+      if (source !== 'range') range.value = text
+      if (source !== 'number') number.value = text
+      range.setAttribute('aria-valuenow', text)
+      commitCondition(condition.id, snapped)
+    }
+    range.addEventListener('input', () => syncPair(parseFloat(range.value), 'range'))
+    number.addEventListener('input', () => {
+      const parsed = parseFloat(number.value)
+      if (!Number.isFinite(parsed) || parsed < condition.min || parsed > condition.max) return
+      syncPair(parsed, 'number')
+    })
+    number.addEventListener('change', () => syncPair(parseFloat(number.value), 'number'))
+    return wrap
   }
 
   function setTime(sec: number) {
@@ -330,6 +413,7 @@ export function mountHazardShell(options: HazardShellOptions): () => void {
     explainMode = explainMode === 'simple' ? 'engineering' : 'simple'
     setExplainMode(explainMode)
     syncExplainBtn()
+    renderConditions()
     renderReadouts()
     renderStage()
   })

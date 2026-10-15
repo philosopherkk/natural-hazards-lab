@@ -1,5 +1,6 @@
 import { getCatalog, getHazardCopy } from '../i18n'
-import { computeEruptionState } from '../model/eruptionModel'
+import { computeEruptionState, resolveVolcanoConditions, VOLCANO_CONDITION_SPECS } from '../model/eruptionModel'
+import { loadConditionValues } from '../shared/conditionsStore'
 import { formatVolcanoMetric } from '../shared/formatMetricValue'
 import { mountHazardShell, type HazardShellRefs } from '../shared/hazardShell'
 import { VolcanoScene, type InitProgressStep } from '../scene/VolcanoScene'
@@ -8,6 +9,7 @@ import { WebGLUnavailableError } from '../scene/sceneBootstrap'
 export function mountVolcanoApp(): () => void {
   let scene: VolcanoScene | null = null
   let intensity = 0.65
+  let conditions = loadConditionValues('volcano', VOLCANO_CONDITION_SPECS)
 
   const shellTeardown = mountHazardShell({
     hazard: 'volcano',
@@ -21,12 +23,16 @@ export function mountVolcanoApp(): () => void {
       if (labels && scene) scene.updateLabelTexts(labels)
     },
     formatMetric: (id) => {
-      const st = scene?.getLastState() ?? computeEruptionState(0, intensity)
+      const st = scene?.getLastState() ?? computeEruptionState(0, intensity, resolveVolcanoConditions(conditions))
       return formatVolcanoMetric(id, st)
     },
     onIntensityChange: (v) => {
       intensity = v
       scene?.setIntensity(v)
+    },
+    onConditionsChange: (values) => {
+      conditions = values
+      scene?.setConditions(resolveVolcanoConditions(values))
     },
     onTimeChange: (t) => scene?.setTime(t),
     onMount: (refs) => initVolcano(refs),
@@ -49,6 +55,8 @@ export function mountVolcanoApp(): () => void {
       const labels = refs.queryToggle('labels')
       scene.setCutaway(cut?.checked ?? true)
       scene.setLabelsVisible(labels?.checked ?? true)
+      conditions = refs.getConditions()
+      scene.setConditions(resolveVolcanoConditions(conditions))
       scene.setIntensity(parseFloat(refs.intensity.value))
       scene.setTime(0)
       intensity = parseFloat(refs.intensity.value)

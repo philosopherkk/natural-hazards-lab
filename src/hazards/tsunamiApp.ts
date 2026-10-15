@@ -1,5 +1,6 @@
-import { computeTsunamiState } from '../model/tsunamiModel'
+import { computeTsunamiState, resolveTsunamiConditions, TSUNAMI_CONDITION_SPECS } from '../model/tsunamiModel'
 import { getCatalog, getHazardCopy } from '../i18n'
+import { loadConditionValues } from '../shared/conditionsStore'
 import { formatTsunamiMetric } from '../shared/formatMetricValue'
 import { mountHazardShell } from '../shared/hazardShell'
 import { hazardLoadingMessage } from '../shared/hazardSceneInit'
@@ -9,14 +10,22 @@ import { WebGLUnavailableError } from '../scene/sceneBootstrap'
 export function mountTsunamiApp(): () => void {
   let scene: TsunamiScene | null = null
   let intensity = 0.65
+  let conditions = loadConditionValues('tsunami', TSUNAMI_CONDITION_SPECS)
 
   const shellTeardown = mountHazardShell({
     hazard: 'tsunami',
     formatMetric: (id) =>
-      formatTsunamiMetric(id, scene?.getState() ?? computeTsunamiState(0, intensity)),
+      formatTsunamiMetric(
+        id,
+        scene?.getState() ?? computeTsunamiState(0, intensity, resolveTsunamiConditions(conditions)),
+      ),
     onIntensityChange: (v) => {
       intensity = v
       scene?.setIntensity(v)
+    },
+    onConditionsChange: (values) => {
+      conditions = values
+      scene?.setConditions(resolveTsunamiConditions(values))
     },
     onTimeChange: (t) => scene?.setTime(t),
     onMount: async (refs) => {
@@ -28,6 +37,8 @@ export function mountTsunamiApp(): () => void {
           refs.loading.textContent = hazardLoadingMessage('tsunami', step)
         })
         intensity = parseFloat(refs.intensity.value)
+        conditions = refs.getConditions()
+        scene.setConditions(resolveTsunamiConditions(conditions))
         scene.setIntensity(intensity)
         scene.setTime(0)
         scene.start()
