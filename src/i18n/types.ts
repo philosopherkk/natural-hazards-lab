@@ -82,6 +82,8 @@ export interface CommonCopy {
   reset: string
   resetAria: string
   stageTime: string
+  /** Label for the active timeline step window, e.g. "Step window". */
+  stageStepWindow: string
   legendHeading: string
   helpHeading: string
   footerVersion: string

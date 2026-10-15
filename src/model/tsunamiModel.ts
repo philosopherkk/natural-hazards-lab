@@ -104,10 +104,4 @@ export function computeTsunamiState(timeSec: number, intensity: number): Tsunami
 
 export const TSUNAMI_TIMELINE = TIMELINE
 
-export function tsunamiStageIndex(t: number): number {
-  if (t < 5) return 0
-  if (t < 10) return 1
-  if (t < 16) return 2
-  if (t < 24) return 3
-  return 4
-}
+export { tsunamiStageIndex } from '../i18n/hazards/tsunami.stages'

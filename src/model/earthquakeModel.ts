@@ -122,10 +122,4 @@ export function computeEarthquakeState(timeSec: number, intensity: number): Eart
 
 export const EARTHQUAKE_TIMELINE = TIMELINE
 
-export function earthquakeStageIndex(t: number): number {
-  if (t < 4) return 0
-  if (t < 8) return 1
-  if (t < 14) return 2
-  if (t < 22) return 3
-  return 4
-}
+export { earthquakeStageIndex } from '../i18n/hazards/earthquake.stages'

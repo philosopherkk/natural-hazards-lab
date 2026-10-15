@@ -107,10 +107,4 @@ export function computeAvalancheState(timeSec: number, intensity: number): Avala
 
 export const AVALANCHE_TIMELINE = TIMELINE
 
-export function avalancheStageIndex(t: number): number {
-  if (t < 6) return 0
-  if (t < 9) return 1
-  if (t < 14) return 2
-  if (t < 22) return 3
-  return 4
-}
+export { avalancheStageIndex } from '../i18n/hazards/avalanche.stages'

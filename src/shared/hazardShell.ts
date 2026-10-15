@@ -3,6 +3,7 @@ import {
   getCatalog,
   getHazardCopy,
   stageIndexForTime,
+  stageTimeRangeFor,
   TIMELINE_DURATION,
   toggleLocale,
   type HazardId,
@@ -204,7 +205,8 @@ export function mountHazardShell(options: HazardShellOptions): () => void {
     refs.stageTitle.textContent = stage.title
     refs.stageDesc.textContent =
       explainMode === 'simple' ? stage.descriptionSimple : stage.descriptionEngineering
-    refs.stageTime.textContent = `${commonNow.stageTime}: ${formatTime(timeSec)}`
+    const band = stageTimeRangeFor(options.hazard, idx)
+    refs.stageTime.textContent = `${commonNow.stageStepWindow}: ${band.startSec.toFixed(1)}–${band.endSec.toFixed(1)} s · ${commonNow.stageTime}: ${formatTime(timeSec)}`
   }
 
   function syncExplainBtn() {

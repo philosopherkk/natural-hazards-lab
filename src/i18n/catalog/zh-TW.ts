@@ -1,3 +1,9 @@
+import {
+  avalancheStagesZhTW,
+  earthquakeStagesZhTW,
+  tsunamiStagesZhTW,
+  volcanoStagesZhTW,
+} from '../hazards'
 import type { LocaleCatalog } from '../types'
 
 export const zhTWCatalog: LocaleCatalog = {
@@ -14,6 +20,7 @@ export const zhTWCatalog: LocaleCatalog = {
     reset: '重設',
     resetAria: '回到時間軸起點',
     stageTime: '經過時間',
+    stageStepWindow: '階段時間',
     legendHeading: '圖例',
     helpHeading: '操作與無障礙',
     footerVersion: '版本',
@@ -201,43 +208,7 @@ export const zhTWCatalog: LocaleCatalog = {
         { color: '#6b7280', label: '火山灰羽' },
         { color: '#d4c4a8', label: '坡面聚落' },
       ],
-      stages: [
-        {
-          id: 'build-up',
-          title: '累積期 — 岩漿聚集',
-          descriptionEngineering:
-            '淺部岩漿房充填；P 隨入流與體積模量上升，Q≈0。微應變與震動 RMS 隨充填增加。',
-          descriptionSimple: '岩漿像海綿吸水一樣聚在山下，地面轻轻晃、压力变大。',
-        },
-        {
-          id: 'pre-eruptive',
-          title: '噴發前 — 增壓',
-          descriptionEngineering:
-            '裂隙連通火山口；SO₂ 通量上升。屋頂灰載使強度裕度下降。',
-          descriptionSimple: '氣體冒出，裂縫通到地表，屋顶像撒面粉一样变灰。',
-        },
-        {
-          id: 'onset',
-          title: '起始 — 火山口打開',
-          descriptionEngineering:
-            'ΔP 驟降，Q 依 Hagen–Poiseuille 上升；q=½ρu² 作用於外牆，Q̇ 隨 Q·ΔT 增大。',
-          descriptionSimple: '像拔开瓶塞，熔岩冲出，热风吹打窗户。',
-        },
-        {
-          id: 'active',
-          title: '全盛 — 羽流與熔岩',
-          descriptionEngineering:
-            'Q 維持高位，河道深度增大；熔岩前緣積分 Q，結晶分率隨高溫下降。',
-          descriptionSimple: '火山咆哮，熔岩河往下流，可能埋沒更遠的家。',
-        },
-        {
-          id: 'settling',
-          title: '衰減 — 排放減弱',
-          descriptionEngineering:
-            'P、Q、熱通量與震動下降；η 隨降溫上升，統計各級建物損害。',
-          descriptionSimple: '热闹结束，数一数坏掉的房子，岩漿房慢慢冷却。',
-        },
-      ],
+      stages: volcanoStagesZhTW,
     },
     avalanche: {
       id: 'avalanche',
@@ -274,13 +245,7 @@ export const zhTWCatalog: LocaleCatalog = {
         { color: '#5c4033', label: '岩坡' },
         { color: '#d4c4a8', label: '山屋' },
       ],
-      stages: [
-        { id: 'load', title: '積雪', descriptionEngineering: 'ρ 在坡度 α 上增加，弱面剪應力累積。', descriptionSimple: '雪像蛋糕一層層堆在山上。' },
-        { id: 'fracture', title: '破裂釋放', descriptionEngineering: 'z_s 擴展，V 在超過 μ·σ_n 時躍升。', descriptionSimple: '咔嚓一聲，整片雪 peel 下来。' },
-        { id: 'acceleration', title: '加速', descriptionEngineering: 'v 上升，L 延伸，P=½ρv² 增大。', descriptionSimple: '越滑越快。' },
-        { id: 'runout', title: '谷地衝擊', descriptionEngineering: '摩擦限制 L；山屋依 P 與 L 損壞。', descriptionSimple: '小屋被撞、被埋。' },
-        { id: 'deposit', title: '堆積停止', descriptionEngineering: 'μ 主導減速，v 與 P 衰減。', descriptionSimple: '雪散开，终于停下。' },
-      ],
+      stages: avalancheStagesZhTW,
     },
     tsunami: {
       id: 'tsunami',
@@ -317,13 +282,7 @@ export const zhTWCatalog: LocaleCatalog = {
         { color: '#c2a878', label: '沙灘' },
         { color: '#d4c4a8', label: '海岸房屋' },
       ],
-      stages: [
-        { id: 'strain', title: '離岸應變', descriptionEngineering: '板塊擠壓，D 仍小。', descriptionSimple: '海底被弯成尺，还没断。' },
-        { id: 'rupture', title: '滑移', descriptionEngineering: 'D 突增，H 與 λ 設定。', descriptionSimple: '尺弹回，抬起大量海水。' },
-        { id: 'propagation', title: '傳播', descriptionEngineering: '波前以 c=√(gh) 前進。', descriptionSimple: '水山像快車冲向岸。' },
-        { id: 'inundation', title: '淹水', descriptionEngineering: 'R 放大 H，h_i 驅動建物損害。', descriptionSimple: '水漫過沙灘和街道。' },
-        { id: 'recession', title: '退水', descriptionEngineering: 'Fr 與 h_i 衰減。', descriptionSimple: '海水退去，留下泡水损坏的家。' },
-      ],
+      stages: tsunamiStagesZhTW,
     },
     earthquake: {
       id: 'earthquake',
@@ -360,13 +319,7 @@ export const zhTWCatalog: LocaleCatalog = {
         { color: '#88ccff', label: 'P 波前' },
         { color: '#ffd166', label: 'S 波前' },
       ],
-      stages: [
-        { id: 'strain', title: '彈性應變', descriptionEngineering: '應變蓄積，PGA 低。', descriptionSimple: '岩石像被压的弹簧。' },
-        { id: 'nucleation', title: '破裂起始', descriptionEngineering: 'δ 開始，r_P 擴展。', descriptionSimple: '弹簧滑了，小抖动先到。' },
-        { id: 'rupture', title: '主破裂', descriptionEngineering: 'Mw、PGA、Sa 峰值；r_S 落後 r_P。', descriptionSimple: '大搖來了，強波後到。' },
-        { id: 'strong-shaking', title: '強震動', descriptionEngineering: 'Sa 分級建物損害。', descriptionSimple: '房子晃，有的裂或倒。' },
-        { id: 'aftershock-decay', title: '衰減', descriptionEngineering: '包絡衰減，PGA 回落。', descriptionSimple: '搖晃像鼓聲漸漸停下。' },
-      ],
+      stages: earthquakeStagesZhTW,
     },
   },
 }

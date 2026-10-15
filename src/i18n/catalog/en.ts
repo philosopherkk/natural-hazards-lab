@@ -1,3 +1,9 @@
+import {
+  avalancheStagesEn,
+  earthquakeStagesEn,
+  tsunamiStagesEn,
+  volcanoStagesEn,
+} from '../hazards'
 import type { LocaleCatalog } from '../types'
 
 export const enCatalog: LocaleCatalog = {
@@ -14,6 +20,7 @@ export const enCatalog: LocaleCatalog = {
     reset: 'Reset',
     resetAria: 'Return to start of timeline',
     stageTime: 'Elapsed',
+    stageStepWindow: 'Step window',
     legendHeading: 'Legend',
     helpHeading: 'Controls & accessibility',
     footerVersion: 'Version',
@@ -222,48 +229,7 @@ export const enCatalog: LocaleCatalog = {
         { color: '#6b7280', label: 'Ash plume' },
         { color: '#d4c4a8', label: 'Slope village' },
       ],
-      stages: [
-        {
-          id: 'build-up',
-          title: 'Build-up — magma accumulation',
-          descriptionEngineering:
-            'Melt collects in a shallow reservoir; P_chamber rises with influx and bulk compressibility while Q ≈ 0. Microstrain and tremor RMS increase as fill grows.',
-          descriptionSimple:
-            'Magma fills a pocket under the mountain like water in a sponge. The ground wiggles a little and the “balloon” pressure grows.',
-        },
-        {
-          id: 'pre-eruptive',
-          title: 'Pre-eruptive — pressurization',
-          descriptionEngineering:
-            'Fractures link chamber to vent; SO₂ flux and η(T) govern whether ascent stays laminar once Q opens. Yield margin on roofs begins to fall from ash load.',
-          descriptionSimple:
-            'Gas bubbles out and cracks reach the surface. Houses may get dusty ash like fine flour on the roof.',
-        },
-        {
-          id: 'onset',
-          title: 'Onset — vent opening',
-          descriptionEngineering:
-            'Vent opening drops ΔP; Q jumps via Hagen–Poiseuille. Dynamic pressure q = ½ρu² stresses façades; heat flux Q̇ scales with Q and ΔT.',
-          descriptionSimple:
-            'The cork pops! Lava starts rushing up and a hot wind can bang on windows.',
-        },
-        {
-          id: 'active',
-          title: 'Active — plume & lava',
-          descriptionEngineering:
-            'Sustained supply keeps Q high; lava channel depth grows with effusion. Lava front integrates Q; crystal fraction falls as T stays high.',
-          descriptionSimple:
-            'The volcano roars with ash and a glowing lava river. The flow can bury homes farther downhill.',
-        },
-        {
-          id: 'settling',
-          title: 'Settling — waning discharge',
-          descriptionEngineering:
-            'Declining P and Q reduce heat flux and tremor; η rises as T falls. Structures tally ash, blast, fire, collapse, and burial severities.',
-          descriptionSimple:
-            'The show quiets down. We count damaged houses and the chamber cools like leftovers off the stove.',
-        },
-      ],
+      stages: volcanoStagesEn,
     },
     avalanche: {
       id: 'avalanche',
@@ -364,43 +330,7 @@ export const enCatalog: LocaleCatalog = {
         { color: '#5c4033', label: 'Rock slope' },
         { color: '#d4c4a8', label: 'Chalets' },
       ],
-      stages: [
-        {
-          id: 'load',
-          title: 'Snow loading',
-          descriptionEngineering:
-            'Metamorphism increases ρ on slope α; shear stress builds on buried weak layer while μ sets basal resistance.',
-          descriptionSimple: 'Snow piles up on the mountain like layers on a cake.',
-        },
-        {
-          id: 'fracture',
-          title: 'Fracture & release',
-          descriptionEngineering:
-            'Slab depth z_s grows as tensile crack propagates; released volume V steps when μ·σ_n is exceeded.',
-          descriptionSimple: 'A crack snaps and a slab breaks free—like a sheet peeling off.',
-        },
-        {
-          id: 'acceleration',
-          title: 'Flow acceleration',
-          descriptionEngineering:
-            'v rises with √(2gH); runout L extends while P = ½ρv² climbs toward valley structures.',
-          descriptionSimple: 'The snow races downhill, faster and faster.',
-        },
-        {
-          id: 'runout',
-          title: 'Valley runout & impacts',
-          descriptionEngineering:
-            'Runout capped by Voellmy-style friction; chalets transition scoured → impact → buried by L and P.',
-          descriptionSimple: 'Cabins get knocked, buried, or swept away.',
-        },
-        {
-          id: 'deposit',
-          title: 'Deposition & stop',
-          descriptionEngineering:
-            'μ dominates deceleration; speed and impact pressure decay as L stabilizes.',
-          descriptionSimple: 'The avalanche spreads out and finally stops.',
-        },
-      ],
+      stages: avalancheStagesEn,
     },
     tsunami: {
       id: 'tsunami',
@@ -501,43 +431,7 @@ export const enCatalog: LocaleCatalog = {
         { color: '#c2a878', label: 'Beach & coast' },
         { color: '#d4c4a8', label: 'Coastal houses' },
       ],
-      stages: [
-        {
-          id: 'strain',
-          title: 'Offshore strain',
-          descriptionEngineering:
-            'Subduction strain accumulates; D remains small until rupture nucleates.',
-          descriptionSimple: 'The ocean floor sticks and bends like a bent ruler.',
-        },
-        {
-          id: 'rupture',
-          title: 'Fault slip',
-          descriptionEngineering:
-            'Sudden slip D lifts water column; initial H and λ set from slip and width.',
-          descriptionSimple: 'The ruler snaps back and lifts a huge amount of water.',
-        },
-        {
-          id: 'propagation',
-          title: 'Wave propagation',
-          descriptionEngineering:
-            'Front advances at c = √(gh); Fr tracks phase speed versus √(gH).',
-          descriptionSimple: 'The water hill races toward shore like a fast train.',
-        },
-        {
-          id: 'inundation',
-          title: 'Coastal inundation',
-          descriptionEngineering:
-            'Run-up R amplifies H; h_i drives surge → flood → collapse on structures.',
-          descriptionSimple: 'Water pours over beaches and into streets.',
-        },
-        {
-          id: 'recession',
-          title: 'Recession',
-          descriptionEngineering:
-            'Wave energy dissipates; h_i and Fr decay; affected structure count holds.',
-          descriptionSimple: 'The sea pulls back, leaving wet, damaged homes.',
-        },
-      ],
+      stages: tsunamiStagesEn,
     },
     earthquake: {
       id: 'earthquake',
@@ -638,43 +532,7 @@ export const enCatalog: LocaleCatalog = {
         { color: '#88ccff', label: 'P-wave front' },
         { color: '#ffd166', label: 'S-wave front' },
       ],
-      stages: [
-        {
-          id: 'strain',
-          title: 'Elastic strain',
-          descriptionEngineering:
-            'Blocks store elastic strain; Mw and PGA remain low, buildings stable.',
-          descriptionSimple: 'Rocks squeeze together like a spring being pressed.',
-        },
-        {
-          id: 'nucleation',
-          title: 'Rupture nucleation',
-          descriptionEngineering:
-            'Slip δ initiates; P-wave radius r_P expands at v_P; duration window opens.',
-          descriptionSimple: 'The spring starts to slip—tiny jiggles arrive first.',
-        },
-        {
-          id: 'rupture',
-          title: 'Main rupture',
-          descriptionEngineering:
-            'δ and M₀ peak; PGA and Sa surge; S-wave radius r_S lags r_P.',
-          descriptionSimple: 'The big shake hits—stronger waves catch up.',
-        },
-        {
-          id: 'strong-shaking',
-          title: 'Strong shaking',
-          descriptionEngineering:
-            'Sa(0.3 s) drives cracked → heavy → collapse by distance decay.',
-          descriptionSimple: 'Buildings sway; some crack or fall like toy blocks.',
-        },
-        {
-          id: 'aftershock-decay',
-          title: 'Coda & decay',
-          descriptionEngineering:
-            'Shaking envelope decays; slip stops; PGA falls toward background.',
-          descriptionSimple: 'Shaking fades like a drum roll ending.',
-        },
-      ],
+      stages: earthquakeStagesEn,
     },
   },
 }

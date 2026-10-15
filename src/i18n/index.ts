@@ -1,11 +1,16 @@
 import { enCatalog } from './catalog/en'
 import { zhTWCatalog } from './catalog/zh-TW'
 import type { HazardId, Locale, LocaleCatalog } from './types'
+import type { StageBand } from './hazards/stageUtils'
 
 export type { HazardId, Locale, LocaleCatalog } from './types'
-import { avalancheStageIndex } from '../model/avalancheModel'
-import { earthquakeStageIndex } from '../model/earthquakeModel'
-import { tsunamiStageIndex } from '../model/tsunamiModel'
+import {
+  avalancheStageIndex,
+  earthquakeStageIndex,
+  stageBandFor,
+  tsunamiStageIndex,
+  volcanoStageIndex,
+} from './hazards'
 
 const STORAGE_KEY = 'hazards-lab-locale'
 
@@ -64,11 +69,7 @@ export function stageIndexForTime(hazard: HazardId, seconds: number): number {
       return earthquakeStageIndex(seconds)
     case 'volcano':
     default:
-      if (seconds < 6) return 0
-      if (seconds < 10) return 1
-      if (seconds < 14) return 2
-      if (seconds < 24) return 3
-      return 4
+      return volcanoStageIndex(seconds)
   }
 }
 
@@ -76,3 +77,9 @@ export function stageIndexForTime(hazard: HazardId, seconds: number): number {
 export function volcanoStageIndexForTime(seconds: number): number {
   return stageIndexForTime('volcano', seconds)
 }
+
+export function stageTimeRangeFor(hazard: HazardId, stageIndex: number): StageBand {
+  return stageBandFor(hazard, stageIndex)
+}
+
+export type { StageBand } from './hazards/stageUtils'

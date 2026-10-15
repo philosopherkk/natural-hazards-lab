@@ -1,4 +1,4 @@
-# Natural Hazards Lab (v4.1.0)
+# Natural Hazards Lab (v4.2.0)
 
 Interactive **Vite + TypeScript + Three.js** timelines for four geohazards, with **engineering** and **primary-school (simple)** explanations in **English** and **Traditional Chinese (zh-TW)**.
 
@@ -30,7 +30,7 @@ npm install
 npm run dev
 ```
 
-Open the URL Vite prints (e.g. `http://127.0.0.1:5173/#/`).
+Open **http://127.0.0.1:4321/#/** (Vite is configured for port 4321).
 
 ```bash
 npm run build
@@ -44,5 +44,6 @@ npm run preview
 - `src/model/` — physics sketches (`eruptionModel`, `avalancheModel`, `tsunamiModel`, `earthquakeModel`)
 - `src/scene/` — Three.js scenes per hazard
 - `src/i18n/catalog/` — EN + zh-TW copy for hub and all modules
+- `src/i18n/hazards/` — per-hazard timeline bands (8–12 steps) and stage narratives
 
-**Version:** 4.0.0 · **Updated:** 2026-10-14
+**Version:** 4.2.0 · **Updated:** 2026-10-15
