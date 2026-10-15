@@ -37,15 +37,15 @@ export class AshPlumeSystem {
       const v = hash2(i, 7, 9)
       const life = (timeSec * (0.18 + activity * 0.22) + u) % 1
       const ang = v * TAU + timeSec * 0.12
-      const rad = life * life * (0.25 + activity * 2.6)
-      arr[i * 3] = Math.cos(ang) * rad + life * activity * 1.15
-      arr[i * 3 + 1] = 4.55 + life * rise
-      arr[i * 3 + 2] = Math.sin(ang) * rad * 0.85
+      const rad = life * (0.4 + activity * 4.8) * (0.35 + life)
+      arr[i * 3] = Math.cos(ang) * rad + life * activity * 2.4
+      arr[i * 3 + 1] = 4.7 + life * rise + Math.sin(ang * 2) * life * 0.35
+      arr[i * 3 + 2] = Math.sin(ang) * rad * 0.9
     }
     pos.needsUpdate = true
     const mat = this.points.material as THREE.PointsMaterial
     mat.opacity = activity < 0.05 ? 0 : 0.12 + activity * 0.5
-    mat.size = 0.08 + activity * 0.16
+    mat.size = 0.14 + activity * 0.28
   }
 }
 

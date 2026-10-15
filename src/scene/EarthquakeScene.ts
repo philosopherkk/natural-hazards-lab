@@ -15,8 +15,6 @@ import {
 
 export type EarthquakeInitStep = SceneInitStep
 
-const SEVERITY_MAP = ['intact', 'ash', 'blast', 'fire', 'collapse', 'buried'] as const
-
 export class EarthquakeScene {
   private scene = new THREE.Scene()
   private camera: THREE.PerspectiveCamera
@@ -28,6 +26,9 @@ export class EarthquakeScene {
   private pRings: THREE.Mesh[] = []
   private sRings: THREE.Mesh[] = []
   private crack!: THREE.Mesh
+  private crackBranches: THREE.Mesh[] = []
+  private roads: THREE.Mesh[] = []
+  private readonly faultZ = 2
   private ground!: THREE.Mesh
   private groundBase!: Float32Array
   private cityRoot = new THREE.Group()
@@ -41,13 +42,13 @@ export class EarthquakeScene {
     addAtmosphere(this.scene, 'seismic')
 
     this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 220)
-    this.camera.position.set(12, 7.5, 13)
+    this.camera.position.set(11, 6.8, 12)
 
     this.renderer = createStandardRenderer(container)
     this.renderer.localClippingEnabled = true
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
-    this.controls.target.set(1, 1.4, 1)
+    this.controls.target.set(0.2, 0.6, 2)
     this.controls.maxPolarAngle = Math.PI / 2 - 0.04
 
     addOutdoorLighting(this.scene, 16, 'seismic')
@@ -138,7 +139,7 @@ export class EarthquakeScene {
       new THREE.MeshBasicMaterial({
         color,
         transparent: true,
-        opacity: 0.28,
+        opacity: 0.14,
         side: THREE.DoubleSide,
         depthWrite: false,
       })
@@ -157,7 +158,7 @@ export class EarthquakeScene {
       this.scene.add(s)
     }
 
-    const crackGeo = new THREE.PlaneGeometry(14, 0.35, 40, 3)
+    const crackGeo = new THREE.PlaneGeometry(16, 0.9, 48, 4)
     const cPos = crackGeo.attributes.position as THREE.BufferAttribute
     for (let i = 0; i < cPos.count; i++) {
       const x = cPos.getX(i)
@@ -177,14 +178,68 @@ export class EarthquakeScene {
       }),
     )
     this.crack.rotation.x = -Math.PI / 2
-    this.crack.position.y = 0.04
+    this.crack.position.set(0, 0.05, this.faultZ)
     this.scene.add(this.crack)
+    for (const x of [-2.1, 2.2]) {
+      const branch = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.28, 6, 2, 20),
+        (this.crack.material as THREE.Material).clone(),
+      )
+      branch.rotation.x = -Math.PI / 2
+      branch.position.set(x, 0.05, this.faultZ)
+      this.scene.add(branch)
+      this.crackBranches.push(branch)
+    }
+
+    const roadMat = pbrMaterial(lib.asphalt, { repeat: [6, 1], normalScale: 0.35, roughness: 0.9 })
+    for (const z of [0.7, 2, 3.4]) {
+      const geo = new THREE.PlaneGeometry(12, 0.48, 36, 2)
+      geo.rotateX(-Math.PI / 2)
+      const road = new THREE.Mesh(geo, roadMat)
+      road.position.set(0, 0.03, z)
+      road.receiveShadow = true
+      this.scene.add(road)
+      this.roads.push(road)
+    }
+    for (const x of [-3.2, -1.1, 1.1, 3.3]) {
+      const geo = new THREE.PlaneGeometry(0.42, 5.2, 2, 24)
+      geo.rotateX(-Math.PI / 2)
+      const road = new THREE.Mesh(geo, roadMat)
+      road.position.set(x, 0.03, 2.05)
+      road.receiveShadow = true
+      this.scene.add(road)
+      this.roads.push(road)
+    }
 
     this.village = buildVillage()
-    this.village.group.scale.setScalar(0.85)
-    this.village.group.position.set(-1, 0, 2.2)
+    this.village.group.position.set(0, 0, 0)
+    const spots: [number, number][] = [
+      [-3.2, 0.7],
+      [-1.1, 0.7],
+      [1.1, 0.7],
+      [3.3, 0.7],
+      [-3.2, 3.4],
+      [-1.1, 3.4],
+      [1.1, 3.4],
+      [3.3, 3.4],
+    ]
+    this.village.houses.forEach((house, i) => {
+      const spot = spots[i]
+      if (!spot) return
+      house.root.position.set(spot[0], 0.02, spot[1])
+      house.root.userData.baseX = spot[0]
+      house.root.userData.baseZ = spot[1]
+    })
     this.cityRoot.add(this.village.group)
     this.scene.add(this.cityRoot)
+  }
+
+  private scarpAt(z: number, slip: number, shaking: number, timeSec: number, x: number): number {
+    const dz = z - this.faultZ
+    const step = Math.tanh(dz * 4.2) * slip * 0.22
+    const drop = -slip * 0.08 * Math.exp(-dz * dz * 10)
+    const jitter = Math.sin(x * 2.4 + timeSec * 19) * shaking * 0.03 * Math.exp(-dz * dz * 1.5)
+    return step + drop + jitter
   }
 
   setTime(t: number) {
@@ -203,7 +258,7 @@ export class EarthquakeScene {
 
   private applyState(s: EarthquakeState) {
     const slip = s.faultSlip_m
-    this.faultGlow.position.x = slip * 0.16
+    this.faultGlow.position.set(slip * 0.12, 0.06 + slip * 0.04, this.faultZ)
     const glowMat = this.faultGlow.material as THREE.MeshStandardMaterial
     glowMat.emissiveIntensity = 0.25 + s.shaking * 1.15
 
@@ -217,12 +272,9 @@ export class EarthquakeScene {
       const x = base[i * 3]!
       const y0 = base[i * 3 + 1]!
       const z = base[i * 3 + 2]!
-      const band = Math.exp(-z * z * 5.5)
-      const scarp = (z >= 0 ? 0.28 : -0.1) * slip * 0.04 * Math.exp(-z * z * 14)
-      const crackDrop = -slip * 0.025 * Math.exp(-Math.abs(z) * 3.2)
-      const jitter =
-        Math.sin(x * 2.7 + s.timeSec * 19) * s.shaking * 0.02 * (1 - Math.min(1, Math.abs(z) / 5))
-      pos.setXYZ(i, x + Math.sign(z || 1) * slip * 0.012 * band, y0 + scarp + crackDrop + jitter, z)
+      const dz = z - this.faultZ
+      const shear = Math.sign(dz || 1) * slip * 0.02 * Math.exp(-dz * dz * 4)
+      pos.setXYZ(i, x + shear, y0 + this.scarpAt(z, slip, s.shaking, s.timeSec, x), z)
     }
     pos.needsUpdate = true
     this.ground.geometry.computeVertexNormals()
@@ -247,19 +299,41 @@ export class EarthquakeScene {
     this.camera.position.x = 12 + Math.sin(s.timeSec * 18) * shake * 0.35
     this.camera.position.z = 13 + Math.cos(s.timeSec * 16) * shake * 0.35
 
-    this.crack.scale.x = 0.35 + slip * 0.16
-    this.crack.position.y = 0.05 + slip * 0.01
+    this.crack.scale.set(0.45 + slip * 0.12, 0.7 + slip * 0.22, 1)
+    this.crack.position.y = 0.06 + slip * 0.03
+    this.crack.position.z = this.faultZ
     const crackMat = this.crack.material as THREE.MeshStandardMaterial
-    crackMat.opacity = THREE.MathUtils.clamp(0.25 + slip * 0.12 + s.shaking * 0.4, 0.2, 1)
+    crackMat.opacity = THREE.MathUtils.clamp(0.35 + slip * 0.1 + s.shaking * 0.35, 0.25, 1)
+    this.crackBranches.forEach((branch) => {
+      branch.scale.y = 0.4 + slip * 0.18
+      branch.position.y = this.crack.position.y
+      ;(branch.material as THREE.MeshStandardMaterial).opacity = crackMat.opacity * 0.85
+    })
+    this.roads.forEach((road) => {
+      const attr = road.geometry.attributes.position as THREE.BufferAttribute
+      for (let i = 0; i < attr.count; i++) {
+        const x = attr.getX(i) + road.position.x
+        const z = attr.getZ(i) + road.position.z
+        attr.setY(i, 0.04 + this.scarpAt(z, slip, s.shaking, s.timeSec, x))
+      }
+      attr.needsUpdate = true
+    })
 
     s.buildings.forEach((b, i) => {
       const house = this.village.houses[i]
       if (!house) return
-      const sev = SEVERITY_MAP[THREE.MathUtils.clamp(b.severityIndex, 0, 5)] ?? 'intact'
-      applyHouseSeverity(house, sev, (b.severityIndex % 5) / 5)
-      house.root.rotation.z = Math.sin(s.timeSec * 27 + i * 1.3) * s.shaking * 0.08
-      house.root.rotation.x = Math.sin(s.timeSec * 23 + i * 0.7) * s.shaking * 0.05
-      house.root.position.y += Math.sin(s.timeSec * 31 + i) * s.shaking * 0.035
+      const sev =
+        b.severityIndex >= 3 ? 'buried' : b.severityIndex === 2 ? 'collapse' : b.severityIndex === 1 ? 'blast' : 'intact'
+      applyHouseSeverity(house, sev, b.severityIndex >= 2 ? 0.85 : 0.4)
+      const lean = b.severityIndex * 0.16
+      house.root.rotation.z = Math.sin(s.timeSec * 27 + i * 1.3) * s.shaking * 0.1 + lean
+      house.root.rotation.x = Math.sin(s.timeSec * 23 + i * 0.7) * s.shaking * 0.06 + lean * 0.35
+      const baseX = (house.root.userData.baseX as number) ?? house.root.position.x
+      const baseZ = (house.root.userData.baseZ as number) ?? house.root.position.z
+      const dz = baseZ - this.faultZ
+      house.root.position.x = baseX + Math.sign(dz || 1) * slip * 0.04
+      house.root.position.z = baseZ
+      house.root.position.y += this.scarpAt(baseZ, slip, 0, s.timeSec, baseX)
     })
   }
 

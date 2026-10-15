@@ -2,6 +2,14 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { computeTsunamiState, type TsunamiState } from '../model/tsunamiModel'
 import { fbm, mulberry32 } from './noise'
+
+function coastHeight(x: number, z: number): number {
+  const beach = THREE.MathUtils.smoothstep(x, 4.5, 8.5) * 0.42
+  const dune = Math.exp(-((x - 8.2) ** 2) / 5.5) * (0.32 + 0.14 * Math.sin(z * 0.42))
+  const town = THREE.MathUtils.smoothstep(x, 9, 12.5) * 0.38
+  const n = (fbm(x * 0.32, z * 0.32, 14, 3) - 0.5) * 0.18
+  return Math.max(0, beach + dune + town + n)
+}
 import { ensurePbrLibraryAsync, floodMaterial, getPbrLibrary, pbrMaterial, waterMaterial } from './pbrLibrary'
 import { scheduleIdle, yieldFrame } from './initTiming'
 import {
@@ -24,6 +32,9 @@ export class TsunamiScene {
   private fault!: THREE.Mesh
   private waveRing!: THREE.Mesh
   private floodPlane!: THREE.Mesh
+  private bore!: THREE.Mesh
+  private readonly boreZ = 32
+  private readonly boreP = 12
   private houses: THREE.Group[] = []
   private houseBaseY: number[] = []
   private baseWaterY = 0.15
@@ -36,12 +47,12 @@ export class TsunamiScene {
     addAtmosphere(this.scene, 'marine')
 
     this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 260)
-    this.camera.position.set(18, 10, 18)
+    this.camera.position.set(8, 3.4, 14)
 
     this.renderer = createStandardRenderer(container)
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
-    this.controls.target.set(3, 1.1, 0)
+    this.controls.target.set(6, 0.7, 0)
     this.controls.maxPolarAngle = Math.PI / 2 - 0.04
 
     addOutdoorLighting(this.scene, 20, 'marine')
@@ -109,60 +120,60 @@ export class TsunamiScene {
     this.fault.position.set(-8, -0.15, 0)
     this.scene.add(this.fault)
 
-    const beachGeo = new THREE.PlaneGeometry(12, 22, 36, 28)
-    beachGeo.rotateX(-Math.PI / 2)
-    const bPos = beachGeo.attributes.position as THREE.BufferAttribute
-    for (let i = 0; i < bPos.count; i++) {
-      const x = bPos.getX(i)
-      const z = bPos.getZ(i)
-      const slope = THREE.MathUtils.smoothstep(x, -6, 5) * 0.85
-      bPos.setY(i, slope + fbm(x * 0.5, z * 0.5, 14, 3) * 0.08)
+    const coastGeo = new THREE.PlaneGeometry(18, 26, 48, 40)
+    coastGeo.rotateX(-Math.PI / 2)
+    const cPos = coastGeo.attributes.position as THREE.BufferAttribute
+    for (let i = 0; i < cPos.count; i++) {
+      const x = cPos.getX(i) + 11
+      const z = cPos.getZ(i)
+      cPos.setY(i, coastHeight(x, z))
     }
-    beachGeo.computeVertexNormals()
-    const beach = new THREE.Mesh(
-      beachGeo,
-      pbrMaterial(lib.sand, { repeat: [5, 4], normalScale: 0.8, roughness: 0.92 }),
+    coastGeo.computeVertexNormals()
+    const coast = new THREE.Mesh(
+      coastGeo,
+      pbrMaterial(lib.sand, { repeat: [6, 5], color: 0xe4d0a8, normalScale: 0.85, roughness: 0.9 }),
     )
-    beach.position.set(8.5, 0.02, 0)
-    beach.receiveShadow = true
-    this.scene.add(beach)
+    coast.position.set(11, 0, 0)
+    coast.receiveShadow = true
+    this.scene.add(coast)
 
-    const plateau = new THREE.Mesh(
-      new THREE.BoxGeometry(13, 0.85, 20),
-      pbrMaterial(lib.sand, { repeat: [4, 4], color: 0xe6d2b0, normalScale: 0.7, roughness: 0.9 }),
+    const roadGeo = new THREE.PlaneGeometry(0.7, 18, 1, 24)
+    roadGeo.rotateX(-Math.PI / 2)
+    const rPos = roadGeo.attributes.position as THREE.BufferAttribute
+    for (let i = 0; i < rPos.count; i++) {
+      const z = rPos.getZ(i)
+      rPos.setY(i, coastHeight(9.2, z) + 0.03)
+    }
+    const road = new THREE.Mesh(
+      roadGeo,
+      pbrMaterial(lib.asphalt, { repeat: [1, 8], normalScale: 0.4, roughness: 0.88 }),
     )
-    plateau.position.set(12.2, 0.42, 0)
-    plateau.receiveShadow = true
-    plateau.castShadow = true
-    this.scene.add(plateau)
-
-    const promenade = new THREE.Mesh(
-      new THREE.BoxGeometry(1.15, 0.1, 16),
-      pbrMaterial(lib.asphalt, { repeat: [1, 6], normalScale: 0.45, roughness: 0.88 }),
-    )
-    promenade.position.set(7.2, 0.9, 0)
-    promenade.receiveShadow = true
-    promenade.castShadow = true
-    this.scene.add(promenade)
+    road.position.set(9.2, 0, 0)
+    road.receiveShadow = true
+    this.scene.add(road)
 
     const rand = mulberry32(8)
     const wall = pbrMaterial(lib.stucco, { repeat: [2, 2], normalScale: 0.6, roughness: 0.9 })
-    const roof = pbrMaterial(lib.roof, { repeat: [2, 2], normalScale: 0.9, roughness: 0.84 })
-    for (let i = 0; i < 8; i++) {
+    const roofMat = pbrMaterial(lib.roof, { repeat: [2, 2], normalScale: 0.9, roughness: 0.84 })
+    for (let i = 0; i < 10; i++) {
       const g = new THREE.Group()
       const floors = 1 + (i % 3)
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(0.9, 0.38 * floors, 0.78),
-        wall.clone(),
-      )
-      body.position.y = (0.38 * floors) / 2
+      const w = 0.85 + (i % 2) * 0.25
+      const body = new THREE.Mesh(new THREE.BoxGeometry(w, 0.42 * floors, 0.75), wall.clone())
+      body.position.y = (0.42 * floors) / 2
       body.castShadow = true
       body.receiveShadow = true
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.08, 0.86), roof.clone())
-      cap.position.y = 0.38 * floors + 0.05
-      cap.castShadow = true
+      const pitch = roofMat.clone()
+      const left = new THREE.Mesh(new THREE.BoxGeometry(w * 0.62, 0.07, 0.9), pitch)
+      left.position.set(-w * 0.22, 0.42 * floors + 0.16, 0)
+      left.rotation.z = 0.48
+      left.castShadow = true
+      const right = new THREE.Mesh(new THREE.BoxGeometry(w * 0.62, 0.07, 0.9), pitch)
+      right.position.set(w * 0.22, 0.42 * floors + 0.16, 0)
+      right.rotation.z = -0.48
+      right.castShadow = true
       const glass = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.16, 0.12),
+        new THREE.PlaneGeometry(0.18, 0.16),
         new THREE.MeshPhysicalMaterial({
           color: 0xb7d4e8,
           roughness: 0.05,
@@ -170,17 +181,21 @@ export class TsunamiScene {
           opacity: 0.62,
         }),
       )
-      glass.position.set(0, 0.22 * floors, 0.4)
-      g.add(body, cap, glass)
-      const hx = 9.2 + (i % 4) * 1.2
-      const hz = -4.2 + Math.floor(i / 4) * 3.4
-      const hy = 0.9 + fbm(hx, hz, 3, 2) * 0.04
+      glass.position.set(0, 0.28 * floors, 0.39)
+      g.add(body, left, right, glass)
+      const col = i % 5
+      const row = Math.floor(i / 5)
+      const hx = 10.4 + row * 1.7
+      const hz = -6.2 + col * 2.5
+      const hy = coastHeight(hx, hz)
       g.position.set(hx, hy, hz)
-      g.rotation.y = (rand() - 0.5) * 0.2
+      g.rotation.y = (rand() - 0.5) * 0.25
       this.scene.add(g)
       this.houses.push(g)
       this.houseBaseY.push(hy)
     }
+
+    this.bore = this.buildBore(lib.waterNormal)
 
     this.waveRing = new THREE.Mesh(
       new THREE.RingGeometry(0.35, 0.55, 64),
@@ -196,11 +211,82 @@ export class TsunamiScene {
     this.waveRing.position.y = this.baseWaterY + 0.08
     this.scene.add(this.waveRing)
 
-    this.floodPlane = new THREE.Mesh(new THREE.PlaneGeometry(10, 16, 24, 16), floodMaterial(lib.waterNormal))
+    this.floodPlane = new THREE.Mesh(new THREE.PlaneGeometry(8, 16, 20, 18), floodMaterial(lib.waterNormal))
     this.floodPlane.rotation.x = -Math.PI / 2
-    this.floodPlane.position.set(10.2, 0.6, 0)
+    this.floodPlane.position.set(11.4, 0, 0)
     this.floodPlane.visible = false
     this.scene.add(this.floodPlane)
+  }
+
+  private buildBore(normal: THREE.Texture): THREE.Mesh {
+    const zSeg = this.boreZ
+    const pSeg = this.boreP
+    const positions = new Float32Array((zSeg + 1) * (pSeg + 1) * 3)
+    const uvs: number[] = []
+    const indices: number[] = []
+    const row = pSeg + 1
+    for (let z = 0; z <= zSeg; z++) {
+      for (let p = 0; p <= pSeg; p++) {
+        uvs.push(z / zSeg, p / pSeg)
+      }
+    }
+    for (let z = 0; z < zSeg; z++) {
+      for (let p = 0; p < pSeg; p++) {
+        const a = z * row + p
+        indices.push(a, a + row, a + 1, a + 1, a + row, a + row + 1)
+      }
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+    geo.setIndex(indices)
+    const mat = new THREE.MeshPhysicalMaterial({
+      color: 0xd7f3ff,
+      roughness: 0.08,
+      metalness: 0.02,
+      normalMap: normal,
+      normalScale: new THREE.Vector2(0.25, 0.25),
+      transparent: true,
+      opacity: 0.82,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+    const mesh = new THREE.Mesh(geo, mat)
+    mesh.frustumCulled = false
+    this.scene.add(mesh)
+    return mesh
+  }
+
+  private shapeBore(frontX: number, height: number, travel: number) {
+    const zSeg = this.boreZ
+    const pSeg = this.boreP
+    const attr = this.bore.geometry.getAttribute('position') as THREE.BufferAttribute
+    const length = 16
+    let v = 0
+    for (let z = 0; z <= zSeg; z++) {
+      const zz = (z / zSeg - 0.5) * length
+      const jag = 1 + Math.sin(zz * 1.3) * 0.08
+      for (let p = 0; p <= pSeg; p++) {
+        const u = p / pSeg
+        let px: number
+        let py: number
+        if (u < 0.55) {
+          const t = u / 0.55
+          px = 0.12 * t
+          py = height * jag * t
+        } else {
+          const t = (u - 0.55) / 0.45
+          px = -1.35 * t
+          py = height * jag * (1 - 0.25 * t)
+        }
+        attr.setXYZ(v, frontX + px, this.baseWaterY + py, zz)
+        v++
+      }
+    }
+    attr.needsUpdate = true
+    this.bore.geometry.computeVertexNormals()
+    this.bore.visible = height > 0.25 && travel > 0.05 && travel < 0.98
+    ;(this.bore.material as THREE.MeshPhysicalMaterial).opacity = 0.55 + Math.min(height, 2) * 0.15
   }
 
   setTime(t: number) {
@@ -236,7 +322,7 @@ export class TsunamiScene {
         Math.cos(z * 0.64 - s.timeSec * 0.85) *
         0.035 *
         landDamp
-      const h = s.waveHeight_m * 0.16 * shape * packet * shoal * landDamp + chop
+      const h = s.waveHeight_m * 0.42 * shape * packet * shoal * landDamp + chop * 1.8
       pos.setY(i, h)
     }
     pos.needsUpdate = true
@@ -258,9 +344,11 @@ export class TsunamiScene {
     this.waveRing.position.x = frontX
     ;(this.waveRing.material as THREE.MeshBasicMaterial).opacity = 0.08 + s.waveHeight_m * 0.03
 
+    this.shapeBore(frontX, Math.max(0.35, s.waveHeight_m * 0.85 * (1 + travel * 1.6)), travel)
+
     const flood = s.inundationDepth_m > 0.35
     this.floodPlane.visible = flood
-    this.floodPlane.position.set(11.2, 0.92 + s.inundationDepth_m * 0.09, 0)
+    this.floodPlane.position.set(11.4, coastHeight(11.4, 0) + 0.08 + s.inundationDepth_m * 0.12, 0)
     const floodMat = this.floodPlane.material as THREE.MeshPhysicalMaterial
     floodMat.opacity = THREE.MathUtils.clamp(0.22 + s.inundationDepth_m * 0.06, 0.2, 0.62)
     if (floodMat.normalMap) {

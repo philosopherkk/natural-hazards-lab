@@ -14,14 +14,14 @@ export interface HouseBuild {
 }
 
 const HOUSE_LAYOUT: { x: number; z: number; rot: number; distM: number }[] = [
-  { x: 5.2, z: 2.1, rot: -0.35, distM: 420 },
-  { x: 6.1, z: 3.4, rot: -0.2, distM: 580 },
-  { x: 7.0, z: 1.2, rot: 0.15, distM: 720 },
-  { x: 5.8, z: 4.8, rot: -0.5, distM: 890 },
-  { x: 8.2, z: 2.8, rot: 0.05, distM: 1050 },
-  { x: 7.5, z: 5.2, rot: -0.25, distM: 1180 },
-  { x: 9.0, z: 4.0, rot: 0.2, distM: 1320 },
-  { x: 8.8, z: 6.1, rot: -0.15, distM: 1480 },
+  { x: 5.4, z: 1.6, rot: -0.4, distM: 420 },
+  { x: 7.2, z: 2.8, rot: -0.15, distM: 580 },
+  { x: 6.2, z: 4.6, rot: 0.2, distM: 720 },
+  { x: 8.4, z: 1.2, rot: -0.55, distM: 890 },
+  { x: 8.8, z: 3.6, rot: 0.05, distM: 1050 },
+  { x: 7.6, z: 5.8, rot: -0.25, distM: 1180 },
+  { x: 10.0, z: 2.4, rot: 0.25, distM: 1320 },
+  { x: 9.6, z: 5.2, rot: -0.1, distM: 1480 },
 ]
 
 let windowMaterial: THREE.MeshPhysicalMaterial | null = null
@@ -48,50 +48,52 @@ function makeHouse(): Omit<HouseBuild, 'distanceScene'> {
   const roofMat = pbrMaterial(lib.roof, { repeat: [3, 2], normalScale: 1.1, roughness: 0.88 })
   const woodMat = pbrMaterial(lib.bark, { repeat: [1, 2], normalScale: 0.8, color: 0xc4a080 })
 
-  const walls = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.46, 0.48), wallMat)
-  walls.position.y = 0.23
+  const walls = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.78, 0.9), wallMat)
+  walls.position.y = 0.39
   walls.castShadow = true
   walls.receiveShadow = true
   root.add(walls)
 
   const roof = new THREE.Group()
-  const left = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.56), roofMat)
-  left.position.set(-0.15, 0.52, 0)
-  left.rotation.z = 0.48
+  const left = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.08, 1.05), roofMat)
+  left.position.set(-0.28, 0.92, 0)
+  left.rotation.z = 0.5
   left.castShadow = true
-  const right = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.56), roofMat)
-  right.position.set(0.15, 0.52, 0)
-  right.rotation.z = -0.48
+  const right = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.08, 1.05), roofMat)
+  right.position.set(0.28, 0.92, 0)
+  right.rotation.z = -0.5
   right.castShadow = true
-  roof.add(left, right)
-  const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.08), wallMat)
-  chimney.position.set(-0.12, 0.66, -0.08)
+  const ridge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.08), roofMat)
+  ridge.position.set(0, 1.08, 0)
+  roof.add(left, right, ridge)
+  const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.36, 0.14), wallMat)
+  chimney.position.set(-0.22, 1.15, -0.12)
   chimney.castShadow = true
   roof.add(chimney)
   root.add(roof)
 
-  const door = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.22, 0.12), woodMat)
-  door.position.set(0.3, 0.14, 0)
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.38, 0.22), woodMat)
+  door.position.set(0.54, 0.22, 0)
   root.add(door)
 
   const windows: THREE.Mesh[] = []
   const winMat = glassMaterial()
   for (const oz of [0.14, -0.14]) {
     const frame = new THREE.Mesh(
-      new THREE.BoxGeometry(0.02, 0.12, 0.1),
+      new THREE.BoxGeometry(0.04, 0.22, 0.18),
       pbrMaterial(lib.bark, { color: 0x3a2a22, roughness: 0.8, metalness: 0.05 }),
     )
-    frame.position.set(0.3, 0.28, oz)
+    frame.position.set(0.54, 0.48, oz * 1.6)
     root.add(frame)
-    const w = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.09), winMat)
-    w.position.set(0.312, 0.28, oz)
+    const w = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.16), winMat)
+    w.position.set(0.565, 0.48, oz * 1.6)
     w.rotation.y = Math.PI / 2
     root.add(w)
     windows.push(w)
   }
 
   const ashOverlay = new THREE.Mesh(
-    new THREE.BoxGeometry(0.64, 0.5, 0.54),
+    new THREE.BoxGeometry(1.15, 0.86, 1.0),
     pbrMaterial(lib.snow, {
       repeat: [2, 2],
       color: 0x8d8478,
@@ -101,11 +103,11 @@ function makeHouse(): Omit<HouseBuild, 'distanceScene'> {
       depthWrite: false,
     }),
   )
-  ashOverlay.position.y = 0.24
+  ashOverlay.position.y = 0.42
   root.add(ashOverlay)
 
   const cracks = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.5, 0.4),
+    new THREE.PlaneGeometry(0.9, 0.7),
     new THREE.MeshStandardMaterial({
       map: lib.crack,
       transparent: true,
@@ -117,7 +119,7 @@ function makeHouse(): Omit<HouseBuild, 'distanceScene'> {
       polygonOffsetUnits: -2,
     }),
   )
-  cracks.position.set(0.295, 0.26, 0)
+  cracks.position.set(0.54, 0.42, 0)
   cracks.rotation.y = Math.PI / 2
   root.add(cracks)
 
@@ -212,8 +214,8 @@ export function applyHouseSeverity(house: HouseBuild, severity: StructureSeverit
     case 'collapse':
       ashOp = 0.55
       crackOp = 0.9
-      roofSink = 0.35
-      wallTilt = 0.25
+      roofSink = 0.72
+      wallTilt = 0.55
       fire = 0.3
       house.windows.forEach((w) => {
         w.visible = false
@@ -223,8 +225,8 @@ export function applyHouseSeverity(house: HouseBuild, severity: StructureSeverit
     case 'buried':
       ashOp = 0.65
       crackOp = 0.45
-      roofSink = 0.55
-      wallTilt = 0.4
+      roofSink = 0.95
+      wallTilt = 0.7
       buried = 1
       fire = 0
       house.windows.forEach((w) => {
@@ -243,7 +245,7 @@ export function applyHouseSeverity(house: HouseBuild, severity: StructureSeverit
   house.roof.position.y = -roofSink
   house.roof.rotation.z = wallTilt * 0.6
   house.walls.rotation.z = wallTilt * 0.4
-  house.walls.scale.y = 1 - buried * 0.35
+  house.walls.scale.y = 1 - buried * 0.45 - (severity === 'collapse' ? 0.28 : 0)
   house.fireGlow.intensity = fire * 1.8
   if (severity === 'buried') {
     house.root.scale.y = Math.max(0.12, 1 - t * 0.88)

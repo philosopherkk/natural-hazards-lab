@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { fbm } from './noise'
+import { buildFlankChannel, buildGulliedCone } from './meshForms'
 import { getPbrLibrary, pbrMaterial } from './pbrLibrary'
 import { buildVillage, type HouseBuild } from './villageBuilder'
 
@@ -19,34 +20,17 @@ export interface VolcanoBuildResult {
   village: THREE.Group
   houses: HouseBuild[]
   magmaCore: THREE.Mesh
-}
-
-function volcanoProfilePoints(): THREE.Vector2[] {
-  const pts: THREE.Vector2[] = []
-  const segments = 40
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments
-    const y = t * 4.8
-    let r = 4.15 * (1 - t * 0.9)
-    r += Math.sin(t * 18) * 0.07 * (1 - t)
-    r += Math.sin(t * 7 + 1.2) * 0.1 * (1 - t * 0.5)
-    if (t > 0.86) {
-      const crater = (t - 0.86) / 0.14
-      r = Math.max(0.42, r * (1 - crater * 0.55) + crater * 0.48)
-    }
-    if (t < 0.06) r *= 0.92 + t * 1.4
-    pts.push(new THREE.Vector2(Math.max(0.28, r), y))
-  }
-  return pts
+  lavaBase: Float32Array
+  lavaAlong: Float32Array
 }
 
 function groundHeight(x: number, z: number): number {
   const d = Math.hypot(x, z)
-  const n = fbm(x * 0.42, z * 0.42, 6, 4)
-  const foothill = Math.exp(-(d * d) / 26) * 0.62
-  const ridge = (n - 0.5) * 0.38 * Math.min(1, d / 2.4)
-  const villageFlat = THREE.MathUtils.smoothstep(x, 2.6, 4.4)
-  return Math.max(0, (foothill + ridge) * (1 - villageFlat * 0.94))
+  const n = fbm(x * 0.55, z * 0.55, 6, 4)
+  const foothill = Math.exp(-(d * d) / 22) * 0.85
+  const ridge = (n - 0.5) * 0.7 * Math.min(1, d / 1.8)
+  const villageFlat = THREE.MathUtils.smoothstep(x, 3.2, 5.2)
+  return Math.max(0, (foothill + ridge) * (1 - villageFlat * 0.9))
 }
 
 export function buildVolcano(): VolcanoBuildResult {
@@ -107,36 +91,10 @@ export function buildVolcano(): VolcanoBuildResult {
     dikes.push(dike)
   }
 
-  const coneGeo = new THREE.LatheGeometry(volcanoProfilePoints(), 72)
-  const pos = coneGeo.attributes.position as THREE.BufferAttribute
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i)
-    const y = pos.getY(i)
-    const z = pos.getZ(i)
-    const radial = Math.hypot(x, z)
-    const ang = Math.atan2(z, x)
-    const n = fbm(ang * 1.4 + 3, y * 1.7, 12, 4)
-    const nr = radial * (1 + (n - 0.5) * 0.09)
-    pos.setX(i, Math.cos(ang) * nr)
-    pos.setZ(i, Math.sin(ang) * nr)
-  }
-  coneGeo.computeVertexNormals()
-  const cone = new THREE.Mesh(coneGeo, makeRockMat(0xd2b48c, [2.5, 3]))
+  const cone = new THREE.Mesh(buildGulliedCone(), makeRockMat(0xd2b48c, [2.5, 3]))
   cone.castShadow = true
   cone.receiveShadow = true
   root.add(cone)
-
-  for (let layer = 0; layer < 5; layer++) {
-    const y0 = 0.45 + layer * 0.82
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(3.35 - layer * 0.52, 0.055, 8, 56),
-      makeRockMat(new THREE.Color().setHSL(0.07, 0.32, 0.34 - layer * 0.03).getHex(), [1, 1]),
-    )
-    ring.rotation.x = Math.PI / 2
-    ring.position.y = y0
-    ring.castShadow = true
-    root.add(ring)
-  }
 
   const groundGeo = new THREE.PlaneGeometry(36, 36, 80, 80)
   groundGeo.rotateX(-Math.PI / 2)
@@ -156,19 +114,19 @@ export function buildVolcano(): VolcanoBuildResult {
 
   const talusGeo = new THREE.DodecahedronGeometry(0.22, 0)
   const talusMat = pbrMaterial(lib.rock, { repeat: [1, 1], color: 0x9a8070, normalScale: 1, roughness: 0.9 })
-  const talus = new THREE.InstancedMesh(talusGeo, talusMat, 36)
+  const talus = new THREE.InstancedMesh(talusGeo, talusMat, 64)
   talus.castShadow = true
   talus.receiveShadow = true
   const dummy = new THREE.Object3D()
-  for (let i = 0; i < 36; i++) {
-    const ang = (i / 36) * Math.PI * 2
-    const rad = 3.6 + (i % 5) * 0.28
+  const gullyAngles = [0.42, 0.42 + Math.PI, 2.0, 2.0 + Math.PI]
+  for (let i = 0; i < 64; i++) {
+    const ang = gullyAngles[i % gullyAngles.length]! + (i % 7) * 0.05
+    const rad = 2.4 + (i % 9) * 0.28
     const x = Math.cos(ang) * rad
-    const z = Math.sin(ang) * rad * 0.92
-    dummy.position.set(x, groundHeight(x, z) + 0.08, z)
-    dummy.rotation.set(i * 0.4, ang, i * 0.2)
-    const s = 0.55 + (i % 4) * 0.18
-    dummy.scale.setScalar(s)
+    const z = Math.sin(ang) * rad
+    dummy.position.set(x, groundHeight(x, z) + 0.06, z)
+    dummy.rotation.set(i * 0.5, ang, i * 0.17)
+    dummy.scale.setScalar(0.45 + (i % 5) * 0.22)
     dummy.updateMatrix()
     talus.setMatrixAt(i, dummy.matrix)
   }
@@ -225,25 +183,14 @@ export function buildVolcano(): VolcanoBuildResult {
   conduit.position.set(0, 2.6, 0)
   root.add(conduit)
 
-  const lavaFlowGeo = new THREE.PlaneGeometry(3.2, 7, 20, 40)
-  const flowPos = lavaFlowGeo.getAttribute('position') as THREE.BufferAttribute
-  for (let i = 0; i < flowPos.count; i++) {
-    const x = flowPos.getX(i)
-    const y = flowPos.getY(i)
-    const n = fbm(x * 1.4, y * 0.6, 18, 3)
-    flowPos.setZ(i, Math.sin(x * 1.2) * 0.12 + (n - 0.5) * 0.08)
-    flowPos.setY(i, y - Math.abs(x) * 0.28)
-  }
-  lavaFlowGeo.rotateX(-Math.PI / 2)
-  lavaFlowGeo.translate(2.0, 0.08, 1.2)
-  lavaFlowGeo.computeVertexNormals()
+  const channel = buildFlankChannel(0.42)
   const flowMat = lavaMat.clone()
   if (flowMat.map) {
     flowMat.map = flowMat.map.clone()
     flowMat.map.wrapS = flowMat.map.wrapT = THREE.RepeatWrapping
     flowMat.map.needsUpdate = true
   }
-  const lavaFlow = new THREE.Mesh(lavaFlowGeo, flowMat)
+  const lavaFlow = new THREE.Mesh(channel.geometry, flowMat)
   lavaFlow.receiveShadow = true
   root.add(lavaFlow)
 
@@ -258,7 +205,8 @@ export function buildVolcano(): VolcanoBuildResult {
     side: THREE.DoubleSide,
     depthWrite: false,
   })
-  const lavaCrust = new THREE.Mesh(lavaFlowGeo.clone(), crustMat)
+  const crustChannel = buildFlankChannel(0.42)
+  const lavaCrust = new THREE.Mesh(crustChannel.geometry, crustMat)
   root.add(lavaCrust)
 
   const craterPool = new THREE.Mesh(new THREE.CircleGeometry(0.46, 36), flowMat)
@@ -297,5 +245,7 @@ export function buildVolcano(): VolcanoBuildResult {
     village,
     houses,
     magmaCore,
+    lavaBase: channel.base,
+    lavaAlong: channel.along,
   }
 }

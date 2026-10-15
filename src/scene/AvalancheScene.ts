@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { computeAvalancheState, type AvalancheState } from '../model/avalancheModel'
 import { fbm, hash2, mulberry32 } from './noise'
+import { makeConifer } from './meshForms'
 import { ensurePbrLibraryAsync, getPbrLibrary, pbrMaterial } from './pbrLibrary'
 import { scheduleIdle, yieldFrame } from './initTiming'
 import {
@@ -33,6 +34,7 @@ export class AvalancheScene {
   private fracture!: THREE.Mesh
   private slabs: THREE.Mesh[] = []
   private flowRibbon!: THREE.Mesh
+  private flowSnout!: THREE.Mesh
   private flowPositions!: Float32Array
   private runoutFan!: THREE.Mesh
   private powder: THREE.Points | null = null
@@ -47,13 +49,13 @@ export class AvalancheScene {
     addAtmosphere(this.scene, 'alpine')
 
     this.camera = new THREE.PerspectiveCamera(40, 1, 0.1, 240)
-    this.camera.position.set(16, 11, 18)
+    this.camera.position.set(12, 8.5, 14)
 
     this.renderer = createStandardRenderer(container)
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
     this.controls.dampingFactor = 0.06
-    this.controls.target.set(2, 3.2, 0)
+    this.controls.target.set(0.5, 3.4, 0)
     this.controls.maxPolarAngle = Math.PI / 2 - 0.04
 
     addOutdoorLighting(this.scene, 18, 'alpine')
@@ -112,9 +114,14 @@ export class AvalancheScene {
       const x = snowPos.getX(i)
       const z = snowPos.getZ(i)
       const h = slopeHeight(x, z)
-      const cover = THREE.MathUtils.smoothstep(h, 0.05, 0.9)
-      const thick = cover * (0.08 + fbm(x * 0.8, z * 0.8, 11, 2) * 0.1)
-      snowPos.setY(i, cover < 0.02 ? h - 0.12 : h + thick + 0.02)
+      const cover = THREE.MathUtils.smoothstep(h, 0.2, 1.35)
+      const ridge =
+        Math.sin(x * 0.85 + z * 0.35) * 0.16 * cover +
+        Math.sin(z * 1.4 + x * 0.2) * 0.07 * cover
+      const gully = Math.pow(Math.abs(Math.sin(z * 0.55 + x * 0.15)), 8)
+      const thick = cover * (0.1 + fbm(x * 0.7, z * 0.7, 11, 2) * 0.08)
+      const cut = gully > 0.72 && h < 2.4 ? -0.08 : thick + ridge + 0.03
+      snowPos.setY(i, h + cut)
     }
     snowGeo.computeVertexNormals()
     const snowMat = pbrMaterial(lib.snow, {
@@ -132,7 +139,7 @@ export class AvalancheScene {
     this.snowCap.castShadow = true
     this.scene.add(this.snowCap)
 
-    const crownGeo = new THREE.PlaneGeometry(4.4, 1.35, 28, 6)
+    const crownGeo = new THREE.PlaneGeometry(7.2, 2.1, 32, 8)
     const crownPos = crownGeo.attributes.position as THREE.BufferAttribute
     for (let i = 0; i < crownPos.count; i++) {
       const x = crownPos.getX(i)
@@ -152,7 +159,7 @@ export class AvalancheScene {
         side: THREE.DoubleSide,
       }),
     )
-    this.fracture.position.set(-5.6, slopeHeight(-5.6, 0) + 0.4, 0)
+    this.fracture.position.set(-4.2, slopeHeight(-4.2, 0) + 0.2, 0.4)
     this.fracture.rotation.y = 0.15
     this.fracture.rotation.z = -0.15
     this.scene.add(this.fracture)
@@ -169,6 +176,14 @@ export class AvalancheScene {
 
     this.flowRibbon = this.buildFlowRibbon()
     this.scene.add(this.flowRibbon)
+    this.flowSnout = new THREE.Mesh(
+      new THREE.SphereGeometry(1.15, 20, 14),
+      pbrMaterial(lib.snow, { repeat: [1, 1], color: 0xf4f8ff, roughness: 0.55, normalScale: 0.3 }),
+    )
+    this.flowSnout.scale.set(2.4, 0.32, 0.85)
+    this.flowSnout.castShadow = true
+    this.flowSnout.visible = false
+    this.scene.add(this.flowSnout)
 
     this.runoutFan = new THREE.Mesh(
       new THREE.CircleGeometry(1, 40),
@@ -197,24 +212,28 @@ export class AvalancheScene {
     })
     const snowLeaf = pbrMaterial(lib.snow, { repeat: [1, 1], normalScale: 0.2, roughness: 0.7 })
     const rand = mulberry32(19)
-    for (let i = 0; i < 28; i++) {
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 0.5, 7), trunkMat)
-      trunk.position.y = 0.25
-      trunk.castShadow = true
-      const crown = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.85, 8), leafMat)
-      crown.position.y = 0.72
-      crown.castShadow = true
-      const cap = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.28, 7), snowLeaf)
-      cap.position.y = 1.05
-      const tree = new THREE.Group()
-      tree.add(trunk, crown, cap)
-      const tx = -2 + rand() * 14
-      const tz = -6 + rand() * 12
-      tree.position.set(tx, slopeHeight(tx, tz), tz)
-      tree.rotation.y = rand() * Math.PI
-      tree.userData.uniform = 0.75 + rand() * 0.7
-      tree.scale.setScalar(tree.userData.uniform as number)
-      this.trees.add(tree)
+    const clusters: [number, number][] = [
+      [-2.2, -3.4],
+      [-1.2, 2.6],
+      [1.4, -4.2],
+      [2.2, 3.4],
+      [4.6, -2.8],
+      [5.4, 4.1],
+      [7.8, -3.6],
+      [8.6, 2.2],
+    ]
+    for (const [cx, cz] of clusters) {
+      const n = 4 + Math.floor(rand() * 3)
+      for (let k = 0; k < n; k++) {
+        const tree = makeConifer(trunkMat, leafMat, snowLeaf)
+        const tx = cx + (rand() - 0.5) * 1.6
+        const tz = cz + (rand() - 0.5) * 1.6
+        tree.position.set(tx, slopeHeight(tx, tz), tz)
+        tree.rotation.y = rand() * Math.PI
+        tree.userData.uniform = 0.7 + rand() * 0.55
+        tree.scale.setScalar(tree.userData.uniform as number)
+        this.trees.add(tree)
+      }
     }
     this.scene.add(this.trees)
 
@@ -249,8 +268,9 @@ export class AvalancheScene {
       )
       win.position.set(0, 0.42, 0.5)
       g.add(body, roofL, roofR, beam, win)
-      const cx = 8 + i * 1.35
-      const cz = -2 + (i % 2) * 2.2
+      const cx = 2.4 + i * 1.55
+      const cz = i % 2 === 0 ? -0.7 : 0.85
+      g.scale.setScalar(1.35)
       g.position.set(cx, slopeHeight(cx, cz), cz)
       this.scene.add(g)
       this.chalets.push(g)
@@ -358,7 +378,7 @@ export class AvalancheScene {
 
     this.fracture.visible = s.slabFractureDepth_m > 0.05
     this.fracture.scale.y = depth
-    this.fracture.position.y = slopeHeight(-5.6, 0) + 0.15 + depth * 0.35
+    this.fracture.position.y = slopeHeight(-4.2, 0.4) + 0.15 + depth * 0.45
 
     this.snowCap.position.x = -runNorm * 0.35
 
@@ -424,6 +444,7 @@ export class AvalancheScene {
 
   private updateFlowRibbon(runNorm: number, active: boolean, speed: number) {
     this.flowRibbon.visible = active
+    this.flowSnout.visible = active
     if (!active) return
     const attr = this.flowRibbon.geometry.getAttribute('position') as THREE.BufferAttribute
     const base = this.flowPositions
@@ -441,14 +462,19 @@ export class AvalancheScene {
           attr.setXYZ(idx, x, -4, z)
           continue
         }
-        const snout = THREE.MathUtils.clamp(1 - Math.abs(t - runNorm) * 6, 0, 1)
-        const body = 0.18 + snout * 0.55 + Math.min(speed, 40) * 0.004
+        const snout = THREE.MathUtils.clamp(1 - Math.abs(t - runNorm) * 5, 0, 1)
+        const body = 0.22 + snout * 0.85 + Math.min(speed, 40) * 0.006
         const edge = 1 - Math.abs(j / span - 0.5) * 1.4
         attr.setXYZ(idx, x, slopeHeight(x, z) + body * Math.max(0.25, edge), z)
       }
     }
     attr.needsUpdate = true
     this.flowRibbon.geometry.computeVertexNormals()
+    const frontX = -6 + Math.min(runNorm, 1) * 18
+    this.flowSnout.visible = active
+    this.flowSnout.position.set(frontX, slopeHeight(frontX, 0) + 0.45 + Math.min(speed, 40) * 0.008, 0)
+    this.flowSnout.scale.set(1.8 + runNorm * 2.2, 0.28 + runNorm * 0.22, 0.7 + runNorm * 0.55)
+    this.flowSnout.rotation.z = -0.35
     const mat = this.flowRibbon.material as THREE.MeshStandardMaterial
     mat.opacity = 0.78 + Math.min(runNorm, 1) * 0.2
   }

@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import { computeEruptionState, type EruptionState } from '../model/eruptionModel'
 import { buildVolcano } from './volcanoBuilder'
+import { lumpyCloud, revealChannel } from './meshForms'
 import { AshPlumeSystem, SparkSystem } from './particles'
 import { ConduitTracerSystem } from './conduitTracers'
 import { applyHouseSeverity } from './villageBuilder'
@@ -52,7 +53,7 @@ export class VolcanoScene {
     addAtmosphere(this.scene, 'volcano')
 
     this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 180)
-    this.camera.position.set(11.5, 6.4, 12.2)
+    this.camera.position.set(13.2, 7.2, 13.4)
 
     this.renderer = createStandardRenderer(container)
     this.renderer.localClippingEnabled = true
@@ -128,21 +129,20 @@ export class VolcanoScene {
 
     const lib = getPbrLibrary()
     this.plumeGroup = new THREE.Group()
-    const plumeColors = [0x3a342f, 0x5c564f, 0x7d7870, 0xa39e96, 0xcac6bf]
-    for (let i = 0; i < 5; i++) {
+    const plumeColors = [0x2e2926, 0x4a433c, 0x6a635c, 0x8c8680, 0xb2ada6, 0xd0ccc6, 0xe4e1dc]
+    for (let i = 0; i < plumeColors.length; i++) {
       const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.5 + i * 0.28, 18, 14),
+        lumpyCloud(0.7 + i * 0.22, 3 + i * 1.7),
         new THREE.MeshStandardMaterial({
           color: plumeColors[i],
           transparent: true,
-          opacity: 0.14,
+          opacity: 0.22,
           roughness: 1,
           metalness: 0,
           depthWrite: false,
         }),
       )
-      mesh.scale.set(1, 1.7, 1)
-      mesh.position.y = 5.2 + i * 0.8
+      mesh.position.y = 5.4 + i * 0.95
       this.plumeGroup.add(mesh)
     }
     this.scene.add(this.plumeGroup)
@@ -271,21 +271,28 @@ export class VolcanoScene {
     this.build.conduit.scale.set(conduitScale, 1, conduitScale)
 
     this.build.craterGlow.intensity = a * 4.2 * state.intensity
-    this.build.lavaFlow.visible = a > 0.32 || state.lavaFrontM > 30
     const lavaMat = this.build.lavaFlow.material as THREE.MeshStandardMaterial
     const thermal = THREE.MathUtils.clamp((state.T_magma_C - 1000) / 250, 0, 1)
     lavaMat.emissive.setHSL(0.08 - thermal * 0.04, 1, 0.45 + thermal * 0.2)
-    lavaMat.emissiveIntensity = (0.45 + a * 1.9) * (state.Q_m3s > 0 ? 1 : 0.35)
-    if (lavaMat.map) lavaMat.map.offset.y = state.timeSec * 0.012
+    lavaMat.emissiveIntensity = (0.55 + a * 2.1) * (state.Q_m3s > 0 || state.ventOpen ? 1 : 0.2)
+    if (lavaMat.map) lavaMat.map.offset.y = state.timeSec * 0.02
 
-    const frontScene = 1.2 + (state.lavaFrontM / 1500) * 6.5
-    this.build.lavaFlow.scale.set(0.35 + frontScene * 0.12, 1, 0.4 + frontScene * 0.14)
-
+    const reach = state.ventOpen
+      ? THREE.MathUtils.clamp(Math.max((state.timeSec - 9.5) / 14, state.lavaFrontM / 500), 0, 1)
+      : 0
+    revealChannel(this.build.lavaFlow, this.build.lavaBase, this.build.lavaAlong, reach, 0.02)
     const crustMat = this.build.lavaCrust.material as THREE.MeshStandardMaterial
-    const crustFrac = THREE.MathUtils.clamp(1 - thermal + state.timeSec * 0.015, 0, 0.85)
-    crustMat.opacity = state.ventOpen ? crustFrac * 0.82 * Math.max(a, 0.35) : 0
-    crustMat.emissiveIntensity = (1 - crustFrac) * 0.8 + 0.15
-    this.build.lavaCrust.scale.copy(this.build.lavaFlow.scale)
+    const crustFrac = THREE.MathUtils.clamp(1 - thermal + state.timeSec * 0.012, 0, 0.9)
+    crustMat.opacity = reach > 0.05 ? 0.35 + crustFrac * 0.55 : 0
+    crustMat.emissiveIntensity = (1 - crustFrac) * 0.9 + 0.2
+    revealChannel(
+      this.build.lavaCrust,
+      this.build.lavaBase,
+      this.build.lavaAlong,
+      reach,
+      0.05,
+      Math.max(0.08, reach * (0.45 + crustFrac * 0.4)),
+    )
     this.build.craterCrust.scale.setScalar(0.85 + crustFrac * 0.2)
 
     const coneMat = this.build.cone.material as THREE.MeshStandardMaterial
@@ -296,11 +303,12 @@ export class VolcanoScene {
     this.plumeGroup.children.forEach((child, i) => {
       const mesh = child as THREE.Mesh
       const mat = mesh.material as THREE.MeshStandardMaterial
-      const grow = 0.55 + a * (1.35 + i * 0.28)
-      mesh.scale.set(grow * (1 + i * 0.22), (0.7 + a * 1.85) * (1 + i * 0.15), grow * (0.9 + i * 0.16))
-      mat.opacity = (0.1 + a * 0.22) * (1 - i * 0.1)
-      mesh.position.y = 5.15 + i * (0.55 + a * 1.05)
-      mesh.position.x = a * 0.32 * i + Math.sin(state.timeSec * 0.18 + i) * 0.06
+      const grow = 0.85 + a * (1.6 + i * 0.35)
+      mesh.scale.set(grow * (0.7 + i * 0.28), (0.9 + a * 1.4) * (1 + i * 0.08), grow * (0.65 + i * 0.22))
+      mat.opacity = (0.16 + a * 0.28) * (1 - i * 0.08)
+      mesh.position.y = 5.3 + i * (0.7 + a * 0.85)
+      mesh.position.x = a * 0.55 * i + Math.sin(state.timeSec * 0.15 + i) * 0.12
+      mesh.position.z = Math.cos(state.timeSec * 0.11 + i * 0.8) * a * 0.35 * i
     })
 
     if (this.craterSprite) {
