@@ -1,23 +1,20 @@
 import { enCatalog } from './catalog/en'
 import { zhTWCatalog } from './catalog/zh-TW'
-import type { HazardId, Locale, LocaleCatalog } from './types'
+import type { Locale } from './types'
 import type { StageBand } from './hazards/stageUtils'
+import { stageBandFor, stageIndexForTime, type HazardId } from '../hazards/registry'
 
 export type { HazardId, Locale, LocaleCatalog } from './types'
-import {
-  avalancheStageIndex,
-  earthquakeStageIndex,
-  stageBandFor,
-  tsunamiStageIndex,
-  volcanoStageIndex,
-} from './hazards'
+export { stageBandFor, stageIndexForTime }
 
 const STORAGE_KEY = 'hazards-lab-locale'
 
-const catalogs: Record<Locale, LocaleCatalog> = {
+const catalogs = {
   en: enCatalog,
   'zh-TW': zhTWCatalog,
-}
+} as const
+
+export type MetricIdFor<H extends HazardId> = (typeof catalogs)[Locale]['hazards'][H]['metrics'][number]['id']
 
 let currentLocale: Locale = 'en'
 
@@ -25,12 +22,12 @@ export function getLocale(): Locale {
   return currentLocale
 }
 
-export function getCatalog(): LocaleCatalog {
+export function getCatalog() {
   return catalogs[currentLocale]
 }
 
-export function getHazardCopy(id: HazardId) {
-  return getCatalog().hazards[id]
+export function getHazardCopy<H extends HazardId>(id: H) {
+  return catalogs[currentLocale].hazards[id]
 }
 
 /** @deprecated use getCatalog().common — kept for volcano keyboard extras */
@@ -58,20 +55,6 @@ export function toggleLocale(): Locale {
 }
 
 export const TIMELINE_DURATION = 30
-
-export function stageIndexForTime(hazard: HazardId, seconds: number): number {
-  switch (hazard) {
-    case 'avalanche':
-      return avalancheStageIndex(seconds)
-    case 'tsunami':
-      return tsunamiStageIndex(seconds)
-    case 'earthquake':
-      return earthquakeStageIndex(seconds)
-    case 'volcano':
-    default:
-      return volcanoStageIndex(seconds)
-  }
-}
 
 /** Volcano-only alias */
 export function volcanoStageIndexForTime(seconds: number): number {

@@ -1,6 +1,8 @@
-export type Locale = 'en' | 'zh-TW'
+import type { HazardId } from '../hazards/registry'
 
-export type HazardId = 'volcano' | 'avalanche' | 'tsunami' | 'earthquake'
+export type { HazardId }
+
+export type Locale = 'en' | 'zh-TW'
 
 export interface StageCopy {
   id: string
@@ -65,9 +67,9 @@ export interface HazardCopy {
   loadingModel: string
   loadingEffects: string
   /** Expert physical conditions. Empty hides the panel. */
-  conditions?: ConditionCopy[]
+  conditions?: readonly ConditionCopy[]
   /** Optional hazard-specific toggles (volcano cutaway/labels). */
-  toggles?: { id: string; label: string; aria: string }[]
+  toggles?: readonly { id: string; label: string; aria: string }[]
   /** Volcano anatomy labels (3D callouts). */
   sceneLabels?: {
     chamber: string
@@ -76,16 +78,16 @@ export interface HazardCopy {
     lavaFlow: string
     plume: string
   }
-  stages: StageCopy[]
-  legend: LegendItem[]
-  metrics: MetricCopy[]
+  stages: readonly StageCopy[]
+  legend: readonly LegendItem[]
+  metrics: readonly MetricCopy[]
 }
 
 export interface HubCopy {
   appTitle: string
   appSubtitle: string
   pickHazard: string
-  cards: { id: HazardId; title: string; blurb: string; icon: string }[]
+  cards: readonly { id: HazardId; title: string; blurb: string; icon: string }[]
 }
 
 export interface CommonCopy {
@@ -115,7 +117,7 @@ export interface CommonCopy {
   playbackSpeed: string
   playbackSpeedAria: string
   playbackSpeedOptionAria: (rate: number) => string
-  keyboard: KeyboardHint[]
+  keyboard: readonly KeyboardHint[]
 }
 
 export interface LocaleCatalog {

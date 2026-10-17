@@ -8,9 +8,9 @@ import {
   tsunamiStagesEn,
   volcanoStagesEn,
 } from '../hazards'
-import type { LocaleCatalog } from '../types'
+import { defineCatalog } from '../defineCatalog'
 
-export const enCatalog: LocaleCatalog = {
+export const enCatalog = defineCatalog({
   common: {
     htmlLang: 'en',
     langToggle: '中文',
@@ -655,4 +655,4 @@ export const enCatalog: LocaleCatalog = {
       stages: earthquakeStagesEn,
     },
   },
-}
+})

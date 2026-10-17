@@ -7,8 +7,9 @@ import {
   TIMELINE_DURATION,
   toggleLocale,
   type HazardId,
+  type MetricIdFor,
 } from '../i18n'
-import type { ConditionCopy, MetricCopy, StageCopy } from '../i18n/types'
+import type { ConditionCopy, HazardCopy, MetricCopy, StageCopy } from '../i18n/types'
 import { clampCondition, loadConditionValues, saveConditionValues, type NumericSpec } from './conditionsStore'
 import { getExplainMode, setExplainMode, type ExplainMode } from './explainMode'
 import {
@@ -18,14 +19,14 @@ import {
   type PlaybackSpeed,
 } from './playbackSpeed'
 
-export interface HazardShellOptions {
-  hazard: HazardId
+export interface HazardShellOptions<H extends HazardId> {
+  hazard: H
   defaultIntensity?: number
   onMount: (root: HazardShellRefs) => void | Promise<void>
   onTimeChange?: (timeSec: number) => void
   onIntensityChange?: (intensity: number) => void
   onConditionsChange?: (values: Record<string, number>) => void
-  formatMetric: (metricId: string) => string
+  formatMetric: (metricId: MetricIdFor<H>) => string
   extraKeyboard?: { keys: string; action: string }[]
   onLocaleChange?: () => void
 }
@@ -59,12 +60,12 @@ export interface HazardShellRefs {
   getConditions: () => Record<string, number>
 }
 
-export function mountHazardShell(options: HazardShellOptions): () => void {
+export function mountHazardShell<H extends HazardId>(options: HazardShellOptions<H>): () => void {
   const app = document.querySelector('#app')!
   app.innerHTML = ''
   app.className = 'layout'
 
-  const hazardCopy = getHazardCopy(options.hazard)
+  const hazardCopy: HazardCopy = getHazardCopy(options.hazard)
   const common = getCatalog().common
 
   const header = document.createElement('header')
@@ -323,7 +324,7 @@ export function mountHazardShell(options: HazardShellOptions): () => void {
 
   function renderConditions() {
     const copy = getHazardCopy(options.hazard)
-    const list = copy.conditions ?? []
+    const list: readonly ConditionCopy[] = copy.conditions ?? []
     conditionsPanel.hidden = list.length === 0
     conditionsRoot.innerHTML = ''
     for (const condition of list) {

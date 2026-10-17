@@ -1,9 +1,6 @@
 import { hazardFromHash, mountHub } from './hub'
 import { initLocale } from './i18n'
-import { mountAvalancheApp } from './hazards/avalancheApp'
-import { mountEarthquakeApp } from './hazards/earthquakeApp'
-import { mountTsunamiApp } from './hazards/tsunamiApp'
-import { mountVolcanoApp } from './hazards/volcanoApp'
+import { HAZARDS } from './hazards/registry'
 
 let teardown: (() => void) | null = null
 
@@ -12,24 +9,11 @@ function navigate() {
   teardown = null
 
   const target = hazardFromHash(location.hash)
-  switch (target) {
-    case 'volcano':
-      teardown = mountVolcanoApp()
-      break
-    case 'avalanche':
-      teardown = mountAvalancheApp()
-      break
-    case 'tsunami':
-      teardown = mountTsunamiApp()
-      break
-    case 'earthquake':
-      teardown = mountEarthquakeApp()
-      break
-    case 'hub':
-    default:
-      mountHub()
-      break
+  if (target === 'hub') {
+    mountHub()
+    return
   }
+  teardown = HAZARDS[target].mount()
 }
 
 export function initRouter(): void {

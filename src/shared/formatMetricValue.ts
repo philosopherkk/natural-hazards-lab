@@ -1,9 +1,10 @@
+import type { MetricIdFor } from '../i18n'
 import type { AvalancheState } from '../model/avalancheModel'
 import type { EarthquakeState } from '../model/earthquakeModel'
 import type { EruptionState } from '../model/eruptionModel'
 import type { TsunamiState } from '../model/tsunamiModel'
 
-export function formatVolcanoMetric(id: string, s: EruptionState): string {
+export function formatVolcanoMetric(id: MetricIdFor<'volcano'>, s: EruptionState): string {
   switch (id) {
     case 'p_chamber':
       return s.P_chamber_MPa.toFixed(2)
@@ -12,7 +13,6 @@ export function formatVolcanoMetric(id: string, s: EruptionState): string {
     case 'eta':
       return s.eta_Pas >= 1e4 ? s.eta_Pas.toExponential(2) : s.eta_Pas.toFixed(1)
     case 'q':
-    case 'effusion':
       return s.Q_m3s.toFixed(3)
     case 'lava_front':
       return s.lavaFrontM.toFixed(0)
@@ -36,12 +36,14 @@ export function formatVolcanoMetric(id: string, s: EruptionState): string {
       return s.lavaChannelDepth_m.toFixed(2)
     case 'structures':
       return `${s.structuresAffected} / ${s.structures.length}`
-    default:
-      return '—'
+    default: {
+      const leftover: never = id
+      return leftover
+    }
   }
 }
 
-export function formatAvalancheMetric(id: string, s: AvalancheState): string {
+export function formatAvalancheMetric(id: MetricIdFor<'avalanche'>, s: AvalancheState): string {
   switch (id) {
     case 'slope':
       return s.slopeAngleDeg.toFixed(1)
@@ -61,12 +63,14 @@ export function formatAvalancheMetric(id: string, s: AvalancheState): string {
       return s.releasedVolume_k_m3.toFixed(1)
     case 'chalets':
       return `${s.chaletsAffected} / ${s.chalets.length}`
-    default:
-      return '—'
+    default: {
+      const leftover: never = id
+      return leftover
+    }
   }
 }
 
-export function formatTsunamiMetric(id: string, s: TsunamiState): string {
+export function formatTsunamiMetric(id: MetricIdFor<'tsunami'>, s: TsunamiState): string {
   switch (id) {
     case 'slip':
       return s.faultSlip_m.toFixed(2)
@@ -86,12 +90,14 @@ export function formatTsunamiMetric(id: string, s: TsunamiState): string {
       return s.waveFront_km.toFixed(1)
     case 'structures':
       return `${s.structuresAffected} / ${s.structures.length}`
-    default:
-      return '—'
+    default: {
+      const leftover: never = id
+      return leftover
+    }
   }
 }
 
-export function formatEarthquakeMetric(id: string, s: EarthquakeState): string {
+export function formatEarthquakeMetric(id: MetricIdFor<'earthquake'>, s: EarthquakeState): string {
   switch (id) {
     case 'mw':
       return s.magnitudeMw > 0.2 ? s.magnitudeMw.toFixed(2) : '—'
@@ -115,7 +121,9 @@ export function formatEarthquakeMetric(id: string, s: EarthquakeState): string {
       return s.shaking.toFixed(2)
     case 'buildings':
       return `${s.buildingsAffected} / ${s.buildings.length}`
-    default:
-      return '—'
+    default: {
+      const leftover: never = id
+      return leftover
+    }
   }
 }

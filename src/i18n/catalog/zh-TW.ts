@@ -8,9 +8,9 @@ import {
   tsunamiStagesZhTW,
   volcanoStagesZhTW,
 } from '../hazards'
-import type { LocaleCatalog } from '../types'
+import { defineCatalog } from '../defineCatalog'
 
-export const zhTWCatalog: LocaleCatalog = {
+export const zhTWCatalog = defineCatalog({
   common: {
     htmlLang: 'zh-TW',
     langToggle: 'English',
@@ -428,4 +428,4 @@ export const zhTWCatalog: LocaleCatalog = {
       stages: earthquakeStagesZhTW,
     },
   },
-}
+})

@@ -1,3 +1,5 @@
+import type { HazardId } from '../hazards/registry'
+
 /** Per-hazard physical conditions, persisted in sessionStorage. */
 
 export interface NumericSpec {
@@ -19,7 +21,7 @@ export function clampCondition(value: number, spec: NumericSpec): number {
 }
 
 export function loadConditionValues(
-  hazard: string,
+  hazard: HazardId,
   specs: Record<string, NumericSpec>,
 ): Record<string, number> {
   const out: Record<string, number> = {}
@@ -38,7 +40,7 @@ export function loadConditionValues(
   return out
 }
 
-export function saveConditionValues(hazard: string, values: Record<string, number>): void {
+export function saveConditionValues(hazard: HazardId, values: Record<string, number>): void {
   try {
     sessionStorage.setItem(PREFIX + hazard, JSON.stringify(values))
   } catch {

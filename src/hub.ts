@@ -1,5 +1,5 @@
+import { isHazardId, type HazardId } from './hazards/registry'
 import { getCatalog, initLocale, toggleLocale } from './i18n'
-import type { HazardId } from './i18n/types'
 import { APP_VERSION, UPDATE_DATE } from './version'
 
 export function mountHub(): void {
@@ -58,9 +58,6 @@ export function mountHub(): void {
 
 export function hazardFromHash(hash: string): HazardId | 'hub' {
   const path = hash.replace(/^#\/?/, '').split('?')[0]?.toLowerCase() ?? ''
-  if (!path || path === '') return 'hub'
-  if (path === 'volcano' || path === 'avalanche' || path === 'tsunami' || path === 'earthquake') {
-    return path
-  }
+  if (isHazardId(path)) return path
   return 'hub'
 }
